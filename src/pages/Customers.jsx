@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Row, Col, Card, Modal } from 'react-bootstrap'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
 import { motion } from 'framer-motion'
 import {
   FaSearch, FaPhone, FaEnvelope,
@@ -9,18 +9,21 @@ import {
 import { useLanguage } from '../contexts/LanguageContext'
 import Layout from '../components/Layout'
 import CustomerDetail from './CustomerDetail'
+import { fetchCustomers } from '../redux/customerSlice'
 
 const Customers = () => {
-  const [loading, setLoading]             = useState(true)
+  const dispatch                          = useDispatch()
   const [searchTerm, setSearchTerm]       = useState('')
   const [filterType, setFilterType]       = useState('all')
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
 
-  const { customers } = useSelector((state) => state.customer)
+  const { customers, loading } = useSelector((state) => state.customer)
   const { t }         = useLanguage()
 
-  useEffect(() => { setTimeout(() => setLoading(false), 800) }, [])
+  useEffect(() => {
+    dispatch(fetchCustomers())
+  }, [dispatch])
 
   const filteredCustomers = customers.filter((c) => {
     const matchSearch =

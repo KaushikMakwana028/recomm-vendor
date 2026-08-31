@@ -1,6 +1,6 @@
 // src/services/api.js
 
-const API_BASE_URL = "https://admin.recomm.in/api";
+const API_BASE_URL = "http://localhost/kaushik_php/ci_project/recomm/api/";
 
 // ─────────────────────────────────────────────
 // Core fetch wrapper
@@ -115,10 +115,37 @@ export const orderAPI = {
     });
   },
 
-  updateVendorOrderStatus: async (orderId, status, remarks) => {
+  updateVendorOrderStatus: async (orderId, status, remarks, deliveryOption, distance) => {
+    const body = { order_id: orderId, status, remarks };
+    if (deliveryOption) body.delivery_option = deliveryOption;
+    if (distance !== undefined && distance !== null && distance !== "") body.distance = parseFloat(distance);
+
     return apiCall("/update_vendor_order_status", {
       method: "POST",
-      body: JSON.stringify({ order_id: orderId, status, remarks }),
+      body: JSON.stringify(body),
     });
   },
 };
+
+// ─────────────────────────────────────────────
+// Customers API
+// ─────────────────────────────────────────────
+export const customerAPI = {
+  getCustomers: async () => {
+    return apiCall("/get_customer", {
+      method: "GET",
+    });
+  },
+};
+
+// ─────────────────────────────────────────────
+// Reports API
+// ─────────────────────────────────────────────
+export const reportAPI = {
+  getReport: async (filter = "daily") => {
+    return apiCall(`/get_report?filter=${encodeURIComponent(filter)}`, {
+      method: "GET",
+    });
+  },
+};
+

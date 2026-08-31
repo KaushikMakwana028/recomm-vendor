@@ -21,10 +21,10 @@ export const fetchOrders = createAsyncThunk(
 
 export const updateOrderStatus = createAsyncThunk(
   "order/updateOrderStatus",
-  async ({ id, status, remarks = "" }, { rejectWithValue }) => {
+  async ({ id, status, remarks = "", deliveryOption = "", distance = "" }, { rejectWithValue }) => {
     try {
-      await orderService.updateOrderStatus(id, status, remarks);
-      return { id, status };
+      const response = await orderService.updateOrderStatus(id, status, remarks, deliveryOption, distance);
+      return response.data;
     } catch (error) {
       return rejectWithValue(error);
     }
@@ -45,6 +45,11 @@ const orderSlice = createSlice({
         ...action.payload,
         orderDate: new Date().toISOString(),
       });
+      state.orders.sort((a, b) => {
+        const aUrgent = a.deliveryType === "urgent" ? 1 : 0;
+        const bUrgent = b.deliveryType === "urgent" ? 1 : 0;
+        return bUrgent - aUrgent;
+      });
     },
   },
 
@@ -56,7 +61,15 @@ const orderSlice = createSlice({
       })
       .addCase(fetchOrders.fulfilled, (state, action) => {
         state.loading = false;
-        state.orders = action.payload;
+        const sortedOrders = [...action.payload].sort((a, b) => {
+          const aUrgent = a.deliveryType === "urgent" ? 1 : 0;
+          const bUrgent = b.deliveryType === "urgent" ? 1 : 0;
+          if (aUrgent !== bUrgent) {
+            return bUrgent - aUrgent;
+          }
+          return 0; // Preserve default order (time-based) for same type
+        });
+        state.orders = sortedOrders;
       })
       .addCase(fetchOrders.rejected, (state, action) => {
         state.loading = false;
@@ -64,7 +77,21 @@ const orderSlice = createSlice({
       })
       .addCase(updateOrderStatus.fulfilled, (state, action) => {
         const order = state.orders.find((o) => o.id === action.payload.id);
-        if (order) order.status = action.payload.status;
+        if (order) {
+          order.status = action.payload.status;
+          if (action.payload.delivery_charge !== undefined && action.payload.delivery_charge !== null) {
+            order.deliveryCharge = action.payload.delivery_charge;
+          }
+          if (action.payload.total_amount !== undefined && action.payload.total_amount !== null) {
+            order.totalAmount = action.payload.total_amount;
+          }
+          if (action.meta.arg.deliveryOption) {
+            order.deliveryOption = action.meta.arg.deliveryOption;
+          }
+          if (action.meta.arg.distance) {
+            order.distance = parseFloat(action.meta.arg.distance);
+          }
+        }
       });
   },
 });

@@ -19,6 +19,10 @@ const mapOrder = (o) => ({
   // backend sends 'pending' for brand-new orders; frontend tabs expect 'new'
   status: o.status === "pending" ? "new" : o.status,
   orderDate: o.created_at,
+  deliveryOption: o.delivery_option || "",
+  deliveryCharge: o.delivery_charge ? parseFloat(o.delivery_charge) : 0,
+  distance: o.distance ? parseFloat(o.distance) : null,
+  deliveryType: o.delivery_type || "normal",
 });
 
 const orderService = {
@@ -36,16 +40,23 @@ const orderService = {
   },
 
   // Update order status ('accepted' | 'rejected' | 'packed' | 'out_for_delivery' | 'delivered' | 'cancelled')
-  updateOrderStatus: async (orderId, status, remarks = "") => {
-    const data = await orderAPI.updateVendorOrderStatus(
+  updateOrderStatus: async (orderId, status, remarks = "", deliveryOption = "", distance = "") => {
+    const response = await orderAPI.updateVendorOrderStatus(
       orderId,
       status,
       remarks,
+      deliveryOption,
+      distance
     );
     return {
-      success: data.status ?? true,
-      message: data.message || "Order status updated successfully",
-      data: { id: orderId, status },
+      success: response.status ?? true,
+      message: response.message || "Order status updated successfully",
+      data: {
+        id: orderId,
+        status,
+        delivery_charge: response.data?.delivery_charge,
+        total_amount: response.data?.total_amount
+      },
     };
   },
 };

@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 
-const BASE = 'https://admin.recomm.in/api'
+const BASE = 'http://localhost/kaushik_php/ci_project/recomm/api/'
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -153,6 +153,10 @@ const authSlice = createSlice({
       state.otpSent = false
       state.error = null
     },
+    updateUser(state, action) {
+      state.user = action.payload;
+      localStorage.setItem('user', JSON.stringify(action.payload));
+    },
   },
 
   extraReducers: (builder) => {
@@ -241,5 +245,5 @@ const authSlice = createSlice({
   },
 })
 
-export const { logout, clearError, resetOtpState } = authSlice.actions
+export const { logout, clearError, resetOtpState, updateUser } = authSlice.actions
 export default authSlice.reducer

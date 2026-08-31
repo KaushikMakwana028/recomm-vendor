@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Row, Col, Card } from 'react-bootstrap'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
+import { fetchReport } from '../redux/reportSlice'
 import { motion } from 'framer-motion'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -59,17 +60,46 @@ const summaryStats = {
 }
 
 const Reports = () => {
-  const [loading, setLoading]     = useState(true)
+  const dispatch                  = useDispatch()
   const [activeTab, setActiveTab] = useState('daily')
-  const { t } = useLanguage()
+  const { t }                     = useLanguage()
 
-  useEffect(() => { setTimeout(() => setLoading(false), 800) }, [])
+  const { reportData, loading } = useSelector((state) => state.report)
 
-  const chartData = activeTab === 'daily' ? dailyData
-                  : activeTab === 'weekly' ? weeklyData : monthlyData
-  const xKey      = activeTab === 'daily' ? 'time'
-                  : activeTab === 'weekly' ? 'day' : 'month'
-  const current   = summaryStats[activeTab]
+  useEffect(() => {
+    dispatch(fetchReport(activeTab))
+  }, [dispatch, activeTab])
+
+  const xKey = activeTab === 'daily' ? 'time'
+             : activeTab === 'weekly' ? 'day' : 'month'
+
+  const metrics = reportData?.metrics || { total_orders: 0, total_sales: 0, avg_order_value: 0 }
+  
+  const current = {
+    orders: metrics.total_orders,
+    sales: metrics.total_sales,
+    avgOrder: metrics.avg_order_value
+  }
+
+  const salesReport = reportData?.sales_report || { labels: [], values: [] }
+  const chartData = (salesReport.labels || []).map((label, idx) => ({
+    [xKey]: label,
+    sales: salesReport.values[idx] || 0,
+    orders: 0
+  }))
+
+  const categoryDistribution = reportData?.category_distribution || []
+  const categoryData = categoryDistribution.map(item => ({
+    name: item.category,
+    value: item.sales
+  }))
+
+  const topProducts = (reportData?.top_selling_products || []).map(p => ({
+    name: p.product,
+    sold: p.units_sold,
+    revenue: p.revenue,
+    performance: p.performance
+  }))
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
@@ -381,7 +411,7 @@ const Reports = () => {
                       <td>
                         <div className="rep-perf-wrap">
                           <div className="rep-perf-bar"
-                            style={{ width:`${(p.sold/1200)*100}%` }} />
+                            style={{ width:`${p.performance}%` }} />
                         </div>
                       </td>
                     </tr>

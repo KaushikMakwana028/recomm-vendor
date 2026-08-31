@@ -348,6 +348,39 @@ const Orders = () => {
                             <p className="ord__info-item">
                               <strong>Payment:</strong> {order.paymentMethod}
                             </p>
+                            <p className="ord__info-item" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                              <strong>Delivery Type:</strong>
+                              <span style={{
+                                background: order.deliveryType === "urgent" ? "#dc2626" : "#f3f4f6",
+                                color: order.deliveryType === "urgent" ? "#ffffff" : "#374151",
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>
+                                {order.deliveryType === "urgent" ? "Urgent Delivery" : "Normal Delivery"}
+                              </span>
+                            </p>
+                            {order.deliveryOption && (
+                              <p className="ord__info-item" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                                <strong>Delivery Mode:</strong>
+                                <span style={{
+                                  background: order.deliveryOption === "self" ? "#e0f2fe" : "#f3e8ff",
+                                  color: order.deliveryOption === "self" ? "#0369a1" : "#6b21a8",
+                                  padding: "2px 8px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700
+                                }}>
+                                  {order.deliveryOption === "self" ? "By Self" : "Delivery Partner"}
+                                </span>
+                                <span style={{ color: '#4b5563', fontWeight: 600 }}>
+                                  ({order.distance} KM)
+                                </span>
+                              </p>
+                            )}
                             <p className="ord__info-item">
                               <strong>Time:</strong>{" "}
                               {new Date(order.orderDate).toLocaleString(
@@ -442,21 +475,17 @@ const Orders = () => {
                               </button>
                             )}
 
-                            {order.status === "packed" && (
-                              <button
-                                className="ord__btn ord__btn-deliver"
-                                onClick={() =>
-                                  dispatch(
-                                    updateOrderStatus({
-                                      id: order.id,
-                                      status: "out_for_delivery",
-                                    }),
-                                  )
-                                }
-                              >
-                                <FaTruck size={13} /> Out for Delivery
-                              </button>
-                            )}
+                             {order.status === "packed" && (
+                               <button
+                                 className="ord__btn ord__btn-deliver"
+                                 onClick={() => {
+                                   setSelected(order);
+                                   setShowDetail(true);
+                                 }}
+                               >
+                                 <FaTruck size={13} /> Set Delivery & Ship
+                               </button>
+                             )}
 
                             {order.status === "out_for_delivery" && (
                               <button

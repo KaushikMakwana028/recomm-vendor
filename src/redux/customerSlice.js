@@ -1,39 +1,26 @@
-import { createSlice } from '@reduxjs/toolkit'
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import customerService from '../services/customerService'
+
+// ── Async Thunks ──────────────────────────────────────────────
+export const fetchCustomers = createAsyncThunk(
+  'customer/fetchCustomers',
+  async (_, thunkAPI) => {
+    try {
+      const response = await customerService.getAllCustomers()
+      if (response.success) {
+        return response.data
+      }
+      return thunkAPI.rejectWithValue(response.message || 'Failed to fetch customers')
+    } catch (error) {
+      return thunkAPI.rejectWithValue(error?.message || 'Something went wrong')
+    }
+  }
+)
 
 const initialState = {
-  customers: [
-    {
-      id: 1,
-      name: 'Rajesh Kumar',
-      mobile: '+91 9876543210',
-      email: 'rajesh@example.com',
-      totalOrders: 45,
-      totalSpent: 25600,
-      lastOrder: '2024-01-15',
-      isRepeat: true,
-    },
-    {
-      id: 2,
-      name: 'Priya Patel',
-      mobile: '+91 9876543211',
-      email: 'priya@example.com',
-      totalOrders: 32,
-      totalSpent: 18900,
-      lastOrder: '2024-01-14',
-      isRepeat: true,
-    },
-    {
-      id: 3,
-      name: 'Amit Shah',
-      mobile: '+91 9876543212',
-      email: 'amit@example.com',
-      totalOrders: 12,
-      totalSpent: 8500,
-      lastOrder: '2024-01-13',
-      isRepeat: false,
-    },
-  ],
+  customers: [],
   loading: false,
+  error: null,
 }
 
 const customerSlice = createSlice({
@@ -49,6 +36,21 @@ const customerSlice = createSlice({
         ...action.payload,
       })
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchCustomers.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(fetchCustomers.fulfilled, (state, action) => {
+        state.loading = false
+        state.customers = action.payload
+      })
+      .addCase(fetchCustomers.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload
+      })
   },
 })
 

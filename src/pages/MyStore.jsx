@@ -49,6 +49,7 @@ const MyStore = () => {
     shop_name: "",
     owner_name: "",
     address: "",
+    pincode: "",
     contact_number: "",
     gst_number: "",
     opening_time: "",
@@ -77,6 +78,7 @@ const MyStore = () => {
         shop_name: profile.shop_name || "",
         owner_name: profile.owner_name || "",
         address: profile.address || "",
+        pincode: profile.pincode || "",
         contact_number: profile.contact_number || "",
         gst_number: profile.gst_number || "",
         opening_time: profile.opening_time
@@ -876,7 +878,7 @@ const MyStore = () => {
                       </Form.Group>
                     </Col>
 
-                    <Col md={6}>
+                    <Col md={4}>
                       <Form.Group>
                         <label className="ms-label">
                           {t("store.contactNumber") || "Contact Number"}
@@ -893,7 +895,7 @@ const MyStore = () => {
                       </Form.Group>
                     </Col>
 
-                    <Col md={6}>
+                    <Col md={4}>
                       <Form.Group>
                         <label className="ms-label">
                           {t("store.gst") || "GST Number"}
@@ -906,6 +908,27 @@ const MyStore = () => {
                           value={formData.gst_number}
                           onChange={handleChange}
                           placeholder="e.g. 27AAPFU0939F1ZV"
+                        />
+                      </Form.Group>
+                    </Col>
+
+                    <Col md={4}>
+                      <Form.Group>
+                        <label className="ms-label">
+                          Pincode
+                        </label>
+                        <input
+                          className="ms-input"
+                          type="text"
+                          name="pincode"
+                          maxLength={6}
+                          value={formData.pincode}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, "");
+                            handleChange({ target: { name: 'pincode', value: val } });
+                          }}
+                          placeholder="Enter 6-digit Pincode"
+                          required
                         />
                       </Form.Group>
                     </Col>
@@ -1232,6 +1255,7 @@ const MyStore = () => {
                     { key: "Contact", val: formData.contact_number || "—" },
                     { key: "Email", val: formData.email || "—" },
                     { key: "Address", val: formData.address || "—" },
+                    { key: "Pincode", val: formData.pincode || "—" },
                     {
                       key: "Timings",
                       val: `${formData.opening_time || "--:--"} → ${formData.closing_time || "--:--"}`,
