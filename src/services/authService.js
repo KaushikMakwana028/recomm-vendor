@@ -3,7 +3,7 @@ import { authAPI } from './api'
 import axios from 'axios'
 
 export const axiosInstance = axios.create({
-  baseURL: 'http://localhost/kaushik_php/ci_project/recomm/api/',
+  baseURL: 'http://localhost/kaushik/recomm/api/',
   headers: { 'Content-Type': 'application/json' },
 })
 

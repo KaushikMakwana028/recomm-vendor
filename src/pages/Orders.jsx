@@ -10,11 +10,23 @@ import {
   FaTruck,
   FaShoppingCart,
   FaCheckCircle,
+  FaPrint,
+  FaDownload,
 } from "react-icons/fa";
 import { fetchOrders, updateOrderStatus } from "../redux/orderSlice";
+import { fetchProfile } from "../redux/storeSlice";
 import { useLanguage } from "../contexts/LanguageContext";
 import Layout from "../components/Layout";
 import OrderDetail from "./OrderDetail";
+import {
+  showOrderSuccessAlert,
+  showOrderErrorAlert,
+  confirmRejectOrder,
+} from "../utils/orderAlert";
+import {
+  printOrderInvoice,
+  downloadOrderInvoice,
+} from "../utils/invoiceGenerator";
 
 const statusConfig = {
   new: { color: "#00204E", bg: "#f0f9ff" },
@@ -31,6 +43,8 @@ const Orders = () => {
   const [selectedOrder, setSelected] = useState(null);
 
   const { orders, loading } = useSelector((s) => s.order);
+  const { profile } = useSelector((s) => s.store);
+  const { user } = useSelector((s) => s.auth);
   const { t } = useLanguage();
 
   const dispatch = useDispatch();
@@ -39,7 +53,77 @@ const Orders = () => {
     dispatch(fetchOrders())
       .unwrap()
       .catch((err) => console.error("Failed to fetch orders:", err));
-  }, [dispatch]);
+    if (!profile) {
+      dispatch(fetchProfile());
+    }
+  }, [dispatch, profile]);
+
+  const handleStatusUpdate = async (order, targetStatus, extraPayload = {}) => {
+    if (!order) return;
+
+    if (targetStatus === "cancelled") {
+      const confirmed = await confirmRejectOrder(order.orderNumber);
+      if (!confirmed) return;
+    }
+
+    try {
+      await dispatch(
+        updateOrderStatus({
+          id: order.id,
+          status: targetStatus,
+          ...extraPayload,
+        }),
+      ).unwrap();
+
+      // Close detail modal if open
+      setShowDetail(false);
+      setSelected(null);
+
+      // Automatically switch to that section/tab
+      setActiveTab(targetStatus);
+
+      // Step-tailored alerts
+      const stepMessages = {
+        accepted: {
+          title: "Order Accepted! 🎉",
+          html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> has been accepted.</p><span style="display:inline-block; margin-top:8px; font-size:0.8rem; font-weight:600; color:#34A129; background:#dcfce7; padding:4px 12px; border-radius:12px;">Moved to Accepted section</span>`,
+        },
+        packed: {
+          title: "Order Packed! 📦",
+          html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> is packed and ready for delivery.</p><span style="display:inline-block; margin-top:8px; font-size:0.8rem; font-weight:600; color:#189031; background:#bbf7d0; padding:4px 12px; border-radius:12px;">Moved to Packed section</span>`,
+        },
+        out_for_delivery: {
+          title: "Out for Delivery! 🚚",
+          html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> is on the way. Bill generated automatically 🧾</p><span style="display:inline-block; margin-top:8px; font-size:0.8rem; font-weight:600; color:#00204E; background:#f0f9ff; padding:4px 12px; border-radius:12px;">Moved to Out for Delivery section</span>`,
+        },
+        delivered: {
+          title: "Order Delivered! ✅",
+          html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> has been delivered successfully.</p><span style="display:inline-block; margin-top:8px; font-size:0.8rem; font-weight:600; color:#34A129; background:#dcfce7; padding:4px 12px; border-radius:12px;">Moved to Delivered section</span>`,
+        },
+        cancelled: {
+          title: "Order Rejected",
+          html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> has been rejected.</p><span style="display:inline-block; margin-top:8px; font-size:0.8rem; font-weight:600; color:#ef4444; background:#fef2f2; padding:4px 12px; border-radius:12px;">Moved to Cancelled section</span>`,
+        },
+      };
+
+      const info = stepMessages[targetStatus] || {
+        title: "Status Updated!",
+        html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> status updated.</p>`,
+      };
+
+      showOrderSuccessAlert({
+        title: info.title,
+        html: info.html,
+        timer: 1900,
+      });
+    } catch (err) {
+      console.error("Order status update failed:", err);
+      showOrderErrorAlert({
+        title: "Update Failed",
+        text: typeof err === "string" ? err : (err?.message || "Failed to update order status."),
+      });
+    }
+  };
 
   const tabs = [
     { key: "new", label: t("orders.newOrders") || "New" },
@@ -237,6 +321,20 @@ const Orders = () => {
         .ord__btn-done:hover { 
           box-shadow:0 6px 18px rgba(52,161,41,0.35); 
         }
+        .ord__btn-print   { 
+          background:#f8fafc; color:#00204E; 
+          border:1.5px solid #cbd5e1 !important; 
+        }
+        .ord__btn-print:hover { 
+          background:#e2e8f0; color:#001635; 
+        }
+        .ord__btn-download { 
+          background:#f0fdf4; color:#166534; 
+          border:1.5px solid #bbf7d0 !important; 
+        }
+        .ord__btn-download:hover { 
+          background:#dcfce7; color:#14532d; 
+        }
 
         /* ── Empty state ── */
         .ord__empty {
@@ -432,27 +530,13 @@ const Orders = () => {
                               <>
                                 <button
                                   className="ord__btn ord__btn-accept"
-                                  onClick={() =>
-                                    dispatch(
-                                      updateOrderStatus({
-                                        id: order.id,
-                                        status: "accepted",
-                                      }),
-                                    )
-                                  }
+                                  onClick={() => handleStatusUpdate(order, "accepted")}
                                 >
                                   <FaCheck size={13} /> Accept Order
                                 </button>
                                 <button
                                   className="ord__btn ord__btn-reject"
-                                  onClick={() =>
-                                    dispatch(
-                                      updateOrderStatus({
-                                        id: order.id,
-                                        status: "cancelled",
-                                      }),
-                                    )
-                                  }
+                                  onClick={() => handleStatusUpdate(order, "cancelled")}
                                 >
                                   <FaTimes size={13} /> Reject Order
                                 </button>
@@ -462,14 +546,7 @@ const Orders = () => {
                             {order.status === "accepted" && (
                               <button
                                 className="ord__btn ord__btn-packed"
-                                onClick={() =>
-                                  dispatch(
-                                    updateOrderStatus({
-                                      id: order.id,
-                                      status: "packed",
-                                    }),
-                                  )
-                                }
+                                onClick={() => handleStatusUpdate(order, "packed")}
                               >
                                 <FaBox size={13} /> Mark as Packed
                               </button>
@@ -488,19 +565,49 @@ const Orders = () => {
                              )}
 
                             {order.status === "out_for_delivery" && (
-                              <button
-                                className="ord__btn ord__btn-done"
-                                onClick={() =>
-                                  dispatch(
-                                    updateOrderStatus({
-                                      id: order.id,
-                                      status: "delivered",
-                                    }),
-                                  )
-                                }
-                              >
-                                <FaCheckCircle size={13} /> Mark as Delivered
-                              </button>
+                              <>
+                                <button
+                                  className="ord__btn ord__btn-done"
+                                  onClick={() => handleStatusUpdate(order, "delivered")}
+                                >
+                                  <FaCheckCircle size={13} /> Mark as Delivered
+                                </button>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "4px" }}>
+                                  <button
+                                    className="ord__btn ord__btn-print"
+                                    onClick={() => printOrderInvoice(order, profile || user)}
+                                    title="Print Bill"
+                                  >
+                                    <FaPrint size={12} /> Print Bill
+                                  </button>
+                                  <button
+                                    className="ord__btn ord__btn-download"
+                                    onClick={() => downloadOrderInvoice(order, profile || user)}
+                                    title="Download Bill"
+                                  >
+                                    <FaDownload size={12} /> Download
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
+                            {order.status === "delivered" && (
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "4px" }}>
+                                <button
+                                  className="ord__btn ord__btn-print"
+                                  onClick={() => printOrderInvoice(order, profile || user)}
+                                  title="Print Bill"
+                                >
+                                  <FaPrint size={12} /> Print Bill
+                                </button>
+                                <button
+                                  className="ord__btn ord__btn-download"
+                                  onClick={() => downloadOrderInvoice(order, profile || user)}
+                                  title="Download Bill"
+                                >
+                                  <FaDownload size={12} /> Download
+                                </button>
+                              </div>
                             )}
                           </div>
                         </Col>
@@ -548,7 +655,15 @@ const Orders = () => {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ padding: "1.375rem" }}>
-          <OrderDetail order={selectedOrder} />
+          <OrderDetail
+            order={selectedOrder}
+            storeProfile={profile || user}
+            onStatusUpdate={handleStatusUpdate}
+            onClose={() => {
+              setShowDetail(false);
+              setSelected(null);
+            }}
+          />
         </Modal.Body>
       </Modal>
     </Layout>

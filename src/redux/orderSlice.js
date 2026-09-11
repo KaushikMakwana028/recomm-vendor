@@ -91,6 +91,9 @@ const orderSlice = createSlice({
           if (action.meta.arg.distance) {
             order.distance = parseFloat(action.meta.arg.distance);
           }
+          if (action.payload.invoice_url) {
+            order.invoiceUrl = action.payload.invoice_url;
+          }
         }
       });
   },

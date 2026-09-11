@@ -23,6 +23,8 @@ const mapOrder = (o) => ({
   deliveryCharge: o.delivery_charge ? parseFloat(o.delivery_charge) : 0,
   distance: o.distance ? parseFloat(o.distance) : null,
   deliveryType: o.delivery_type || "normal",
+  invoiceUrl: o.invoice_url || "",
+  canDownloadInvoice: o.can_download_invoice ?? ["out_for_delivery", "delivered"].includes(o.status),
 });
 
 const orderService = {
@@ -55,7 +57,8 @@ const orderService = {
         id: orderId,
         status,
         delivery_charge: response.data?.delivery_charge,
-        total_amount: response.data?.total_amount
+        total_amount: response.data?.total_amount,
+        invoice_url: response.data?.invoice_url || "",
       },
     };
   },

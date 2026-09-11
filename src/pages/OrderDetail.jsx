@@ -15,9 +15,15 @@ import {
   FaClock,
   FaCheck,
   FaTimes,
+  FaPrint,
+  FaDownload,
 } from "react-icons/fa";
 import { updateOrderStatus } from "../redux/orderSlice";
 import { fetchProfile } from "../redux/storeSlice";
+import {
+  printOrderInvoice,
+  downloadOrderInvoice,
+} from "../utils/invoiceGenerator";
 
 const statusConfig = {
   new: { color: "#f59e0b", bg: "#fffbeb", label: "New", icon: FaShoppingBag },
@@ -50,10 +56,11 @@ const statusConfig = {
 
 const steps = ["new", "accepted", "packed", "out_for_delivery", "delivered"];
 
-const OrderDetail = ({ order }) => {
+const OrderDetail = ({ order, onStatusUpdate, onClose, storeProfile }) => {
   const dispatch = useDispatch();
   const { profile } = useSelector((state) => state.store);
   const { user } = useSelector((state) => state.auth);
+  const currentProfile = storeProfile || profile || user;
   const [deliveryOption, setDeliveryOption] = useState("self");
   const [distance, setDistance] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -67,8 +74,12 @@ const OrderDetail = ({ order }) => {
   const subtotal = order?.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
   const isPacked = order?.status === "packed";
   const isUrgent = order?.deliveryType === "urgent";
-  const displayDeliveryCharge = Math.round((isPacked ? (distance ? parseFloat(distance) * 10 + (isUrgent ? 50 : 0) : 0) : (order?.deliveryCharge || 0)) * 100) / 100;
-  const displayTotal = Math.round((isPacked ? (subtotal + displayDeliveryCharge) : (order?.totalAmount || subtotal)) * 100) / 100;
+  const urgentCharge = isUrgent ? 50 : 0;
+  const baseDeliveryCharge = isPacked
+    ? (distance && !isNaN(distance) && parseFloat(distance) > 0 ? Math.round(parseFloat(distance) * 10 * 100) / 100 : 0)
+    : (isUrgent && (order?.deliveryCharge || 0) >= 50 ? Math.round(((order?.deliveryCharge || 0) - 50) * 100) / 100 : (order?.deliveryCharge || 0));
+  const totalDeliveryCharge = Math.round((baseDeliveryCharge + urgentCharge) * 100) / 100;
+  const displayTotal = Math.round((isPacked ? (subtotal + totalDeliveryCharge) : (order?.totalAmount || (subtotal + totalDeliveryCharge))) * 100) / 100;
 
   useEffect(() => {
     if (!profile) {
@@ -334,6 +345,24 @@ const OrderDetail = ({ order }) => {
         .od-btn-packed:hover  { box-shadow:0 8px 20px rgba(0,32,78,.4); }
         .od-btn-deliver:hover { box-shadow:0 8px 20px rgba(24,144,49,.4); }
         .od-btn-done:hover    { box-shadow:0 8px 20px rgba(52,161,41,.4); }
+        .od-btn-print {
+          background: #f8fafc; color: #00204E;
+          border: 1.5px solid #cbd5e1 !important;
+          box-shadow: 0 2px 6px rgba(0,32,78,0.06);
+        }
+        .od-btn-print:hover {
+          background: #e2e8f0; color: #001635;
+          box-shadow: 0 4px 12px rgba(0,32,78,0.12);
+        }
+        .od-btn-download {
+          background: #f0fdf4; color: #166534;
+          border: 1.5px solid #bbf7d0 !important;
+          box-shadow: 0 2px 6px rgba(22,101,52,0.06);
+        }
+        .od-btn-download:hover {
+          background: #dcfce7; color: #14532d;
+          box-shadow: 0 4px 12px rgba(22,101,52,0.14);
+        }
       `}</style>
 
       <div className="od-wrap">
@@ -365,7 +394,7 @@ const OrderDetail = ({ order }) => {
           <div className="text-end">
             <p className="od-amount-label">Total Amount</p>
             <p className="od-amount" style={{ color: sc.color }}>
-              ₹{order.totalAmount}
+              ₹{isPacked ? displayTotal : order.totalAmount}
             </p>
           </div>
         </motion.div>
@@ -498,13 +527,30 @@ const OrderDetail = ({ order }) => {
                     )
                   },
                   { key: "Distance", val: `${order.distance} KM` },
-                  { key: "Delivery Charge", val: `₹${order.deliveryCharge}` },
                 ].map(({ key, val }) => (
                   <div key={key} className="od-info-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span className="od-info-key">{key}</span>
                     <span className="od-info-val">{val}</span>
                   </div>
                 ))}
+                {baseDeliveryCharge > 0 && (
+                  <div className="od-info-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="od-info-key">{isUrgent ? "Standard Delivery Charge" : "Delivery Charge"}</span>
+                    <span className="od-info-val">₹{baseDeliveryCharge}</span>
+                  </div>
+                )}
+                {isUrgent && (
+                  <div className="od-info-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="od-info-key" style={{ color: '#dc2626', fontWeight: 700 }}>⚡ Urgent Delivery Charge</span>
+                    <span className="od-info-val" style={{ color: '#dc2626', fontWeight: 700, background: '#fef2f2', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fecaca' }}>
+                      + ₹{urgentCharge}
+                    </span>
+                  </div>
+                )}
+                <div className="od-info-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="od-info-key" style={{ fontWeight: 700, color: '#00204E' }}>Total Delivery Charge</span>
+                  <span className="od-info-val" style={{ fontWeight: 700, color: '#00204E' }}>₹{totalDeliveryCharge}</span>
+                </div>
               </div>
             )}
 
@@ -519,9 +565,27 @@ const OrderDetail = ({ order }) => {
                 fontFamily: "'Poppins', sans-serif",
                 boxShadow: '0 4px 12px rgba(52, 161, 41, 0.04)'
               }}>
-                <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <FaTruck size={14} /> Delivery Setup
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FaTruck size={14} /> Delivery Setup
+                  </p>
+                  {isUrgent && (
+                    <span style={{
+                      background: '#fee2e2',
+                      color: '#dc2626',
+                      border: '1px solid #fecaca',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      ⚡ Urgent (+ ₹50)
+                    </span>
+                  )}
+                </div>
 
                 {/* Check if store pincode is set in profile */}
                 {!vendorPincode ? (
@@ -623,11 +687,27 @@ const OrderDetail = ({ order }) => {
                 ))}
               </div>
               
-              {/* Highlight Delivery Charge inside items summary */}
-              {displayDeliveryCharge > 0 && (
-                <div className="od-info-row" style={{ borderBottom: 'none', padding: '10px 0 0', marginTop: '5px' }}>
-                  <span className="od-info-key" style={{ color: '#0f766e', fontWeight: 700 }}>Delivery Charge</span>
-                  <span className="od-info-val" style={{ color: '#0f766e', fontWeight: 700, background: '#f0fdfa', padding: '3px 10px', borderRadius: '20px', fontSize: '0.72rem', border: '1px solid #ccfbf1' }}>+ ₹{displayDeliveryCharge}</span>
+              {/* Highlight Standard Delivery Charge */}
+              {baseDeliveryCharge > 0 && (
+                <div className="od-info-row" style={{ borderBottom: 'none', padding: '8px 0 0', marginTop: '5px' }}>
+                  <span className="od-info-key" style={{ color: '#0f766e', fontWeight: 600 }}>
+                    {isUrgent ? "Delivery Charge (Distance)" : "Delivery Charge"}
+                  </span>
+                  <span className="od-info-val" style={{ color: '#0f766e', fontWeight: 700, background: '#f0fdfa', padding: '3px 10px', borderRadius: '20px', fontSize: '0.72rem', border: '1px solid #ccfbf1' }}>
+                    + ₹{baseDeliveryCharge}
+                  </span>
+                </div>
+              )}
+
+              {/* Highlight Urgent Delivery Charge in RED */}
+              {isUrgent && (
+                <div className="od-info-row" style={{ borderBottom: 'none', padding: '6px 0 0', marginTop: '2px' }}>
+                  <span className="od-info-key" style={{ color: '#dc2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span>⚡</span> Urgent Delivery Charge
+                  </span>
+                  <span className="od-info-val" style={{ color: '#dc2626', fontWeight: 700, background: '#fef2f2', padding: '3px 10px', borderRadius: '20px', fontSize: '0.72rem', border: '1.5px solid #fecaca', boxShadow: '0 1px 3px rgba(220, 38, 38, 0.12)' }}>
+                    + ₹{urgentCharge}
+                  </span>
                 </div>
               )}
 
@@ -644,11 +724,15 @@ const OrderDetail = ({ order }) => {
                   <Col xs={6}>
                     <button
                       className="od-action-btn od-btn-accept w-100"
-                      onClick={() =>
-                        dispatch(
-                          updateOrderStatus({ id: order.id, status: "accepted" }),
-                        )
-                      }
+                      onClick={() => {
+                        if (onStatusUpdate) {
+                          onStatusUpdate(order, "accepted");
+                        } else {
+                          dispatch(
+                            updateOrderStatus({ id: order.id, status: "accepted" }),
+                          );
+                        }
+                      }}
                       style={{ padding: '10px', fontSize: '0.875rem' }}
                     >
                       <FaCheck size={12} /> Accept
@@ -657,11 +741,15 @@ const OrderDetail = ({ order }) => {
                   <Col xs={6}>
                     <button
                       className="od-action-btn od-btn-reject w-100"
-                      onClick={() =>
-                        dispatch(
-                          updateOrderStatus({ id: order.id, status: "cancelled" }),
-                        )
-                      }
+                      onClick={() => {
+                        if (onStatusUpdate) {
+                          onStatusUpdate(order, "cancelled");
+                        } else {
+                          dispatch(
+                            updateOrderStatus({ id: order.id, status: "cancelled" }),
+                          );
+                        }
+                      }}
                       style={{ padding: '10px', fontSize: '0.875rem' }}
                     >
                       <FaTimes size={12} /> Reject
@@ -672,9 +760,13 @@ const OrderDetail = ({ order }) => {
               {order.status === "accepted" && (
                 <button
                   className="od-action-btn od-btn-packed w-100"
-                  onClick={() =>
-                    dispatch(updateOrderStatus({ id: order.id, status: "packed" }))
-                  }
+                  onClick={() => {
+                    if (onStatusUpdate) {
+                      onStatusUpdate(order, "packed");
+                    } else {
+                      dispatch(updateOrderStatus({ id: order.id, status: "packed" }));
+                    }
+                  }}
                   style={{ padding: '10px', fontSize: '0.875rem' }}
                 >
                   <FaBox size={12} /> Mark as Packed
@@ -688,14 +780,21 @@ const OrderDetail = ({ order }) => {
                       setErrorMsg("Please enter a valid positive distance in KM.");
                       return;
                     }
-                    dispatch(
-                      updateOrderStatus({
-                        id: order.id,
-                        status: "out_for_delivery",
+                    if (onStatusUpdate) {
+                      onStatusUpdate(order, "out_for_delivery", {
                         deliveryOption,
-                        distance: parseFloat(distance)
-                      }),
-                    );
+                        distance: parseFloat(distance),
+                      });
+                    } else {
+                      dispatch(
+                        updateOrderStatus({
+                          id: order.id,
+                          status: "out_for_delivery",
+                          deliveryOption,
+                          distance: parseFloat(distance),
+                        }),
+                      );
+                    }
                   }}
                   style={{ padding: '12px', fontSize: '0.875rem' }}
                 >
@@ -703,17 +802,65 @@ const OrderDetail = ({ order }) => {
                 </button>
               )}
               {order.status === "out_for_delivery" && (
-                <button
-                  className="od-action-btn od-btn-done w-100"
-                  onClick={() =>
-                    dispatch(
-                      updateOrderStatus({ id: order.id, status: "delivered" }),
-                    )
-                  }
-                  style={{ padding: '10px', fontSize: '0.875rem' }}
-                >
-                  <FaCheckCircle size={12} /> Mark as Delivered
-                </button>
+                <>
+                  <button
+                    className="od-action-btn od-btn-done w-100"
+                    onClick={() => {
+                      if (onStatusUpdate) {
+                        onStatusUpdate(order, "delivered");
+                      } else {
+                        dispatch(
+                          updateOrderStatus({ id: order.id, status: "delivered" }),
+                        );
+                      }
+                    }}
+                    style={{ padding: '10px', fontSize: '0.875rem' }}
+                  >
+                    <FaCheckCircle size={12} /> Mark as Delivered
+                  </button>
+                  <Row className="g-2">
+                    <Col xs={6}>
+                      <button
+                        className="od-action-btn od-btn-print w-100"
+                        onClick={() => printOrderInvoice(order, currentProfile)}
+                        style={{ padding: '10px', fontSize: '0.875rem' }}
+                      >
+                        <FaPrint size={12} /> Print Bill
+                      </button>
+                    </Col>
+                    <Col xs={6}>
+                      <button
+                        className="od-action-btn od-btn-download w-100"
+                        onClick={() => downloadOrderInvoice(order, currentProfile)}
+                        style={{ padding: '10px', fontSize: '0.875rem' }}
+                      >
+                        <FaDownload size={12} /> Download Bill
+                      </button>
+                    </Col>
+                  </Row>
+                </>
+              )}
+              {order.status === "delivered" && (
+                <Row className="g-2">
+                  <Col xs={6}>
+                    <button
+                      className="od-action-btn od-btn-print w-100"
+                      onClick={() => printOrderInvoice(order, currentProfile)}
+                      style={{ padding: '10px', fontSize: '0.875rem' }}
+                    >
+                      <FaPrint size={12} /> Print Bill
+                    </button>
+                  </Col>
+                  <Col xs={6}>
+                    <button
+                      className="od-action-btn od-btn-download w-100"
+                      onClick={() => downloadOrderInvoice(order, currentProfile)}
+                      style={{ padding: '10px', fontSize: '0.875rem' }}
+                    >
+                      <FaDownload size={12} /> Download Bill
+                    </button>
+                  </Col>
+                </Row>
               )}
             </div>
           </Col>
