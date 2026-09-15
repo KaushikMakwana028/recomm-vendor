@@ -22,6 +22,7 @@ import {
 } from "../redux/storeSlice";
 import { useLanguage } from "../contexts/LanguageContext";
 import Layout from "../components/Layout";
+import LocationPicker from "../components/LocationPicker";
 
 const ACCOUNT_TYPES = [
   { value: "current", label: "Current Account" },
@@ -50,6 +51,8 @@ const MyStore = () => {
     owner_name: "",
     address: "",
     pincode: "",
+    latitude: null,
+    longitude: null,
     contact_number: "",
     gst_number: "",
     opening_time: "",
@@ -79,6 +82,8 @@ const MyStore = () => {
         owner_name: profile.owner_name || "",
         address: profile.address || "",
         pincode: profile.pincode || "",
+        latitude: profile.latitude !== undefined && profile.latitude !== null ? profile.latitude : null,
+        longitude: profile.longitude !== undefined && profile.longitude !== null ? profile.longitude : null,
         contact_number: profile.contact_number || "",
         gst_number: profile.gst_number || "",
         opening_time: profile.opening_time
@@ -180,6 +185,9 @@ const MyStore = () => {
         shop_name: profile.shop_name || "",
         owner_name: profile.owner_name || "",
         address: profile.address || "",
+        pincode: profile.pincode || "",
+        latitude: profile.latitude !== undefined && profile.latitude !== null ? profile.latitude : null,
+        longitude: profile.longitude !== undefined && profile.longitude !== null ? profile.longitude : null,
         contact_number: profile.contact_number || "",
         gst_number: profile.gst_number || "",
         opening_time: profile.opening_time
@@ -931,6 +939,20 @@ const MyStore = () => {
                           required
                         />
                       </Form.Group>
+                    </Col>
+
+                    <Col md={12}>
+                      <LocationPicker
+                        latitude={formData.latitude}
+                        longitude={formData.longitude}
+                        onChange={({ latitude, longitude }) => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            latitude,
+                            longitude,
+                          }));
+                        }}
+                      />
                     </Col>
 
                     {/* Image Upload — single zone, shows the photo itself once chosen */}

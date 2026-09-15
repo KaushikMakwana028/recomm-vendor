@@ -6,6 +6,8 @@ import {
 } from 'react-icons/fa'
 
 const statusConfig = {
+  pending:          { color: '#f59e0b', bg: '#fffbeb', label: 'New'              },
+  confirmed:        { color: '#34A129', bg: '#dcfce7', label: 'Accepted'         },
   new:              { color: '#f59e0b', bg: '#fffbeb', label: 'New'              },
   accepted:         { color: '#34A129', bg: '#dcfce7', label: 'Accepted'         },
   packed:           { color: '#189031', bg: '#bbf7d0', label: 'Packed'           },

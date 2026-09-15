@@ -1,7 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Row, Col } from 'react-bootstrap'
 import { useDispatch, useSelector } from 'react-redux'
-import { FaSave, FaTimes, FaSearch, FaBox, FaCamera } from 'react-icons/fa'
+import {
+    FaSave,
+    FaTimes,
+    FaSearch,
+    FaBox,
+    FaCamera,
+    FaCheck,
+    FaPlus,
+    FaArrowLeft,
+    FaClock,
+    FaTag,
+    FaBoxes,
+} from 'react-icons/fa'
 import {
     fetchCategories,
     searchProducts,
@@ -18,36 +30,53 @@ const AddProduct = ({ onClose }) => {
     const { categories, searchResults, searchLoading, actionLoading, actionError } =
         useSelector((s) => s.product)
 
-    const [mode, setMode] = useState('new') // 'new' or 'existing'
-    const [searchTerm, setSearchTerm] = useState('')
-    const [searchCategory, setSearchCategory] = useState('') // category filter for existing search
-    const [selectedExisting, setSelectedExisting] = useState(null)
-    const [existingImageUrl, setExistingImageUrl] = useState(null) // locked image from existing product
+    // Flow modes: 'catalogue' (default) vs 'custom' (fallback for products not in catalogue)
+    const [mode, setMode] = useState('catalogue')
 
+    // Catalogue search & filter state
+    const [selectedCategory, setSelectedCategory] = useState('')
+    const [searchTerm, setSearchTerm] = useState('')
+    const [selectedBrand, setSelectedBrand] = useState('')
+    const [activeSection, setActiveSection] = useState('all') // 'all' or 'recent'
+
+    // Selected product & variant from catalogue
+    const [selectedProduct, setSelectedProduct] = useState(null)
+    const [selectedVariant, setSelectedVariant] = useState(null)
+
+    // Form data for vendor entry (Catalogue flow & Custom fallback flow)
     const [formData, setFormData] = useState({
-        product_id: null,
+        selling_price: '',
+        stock: '',
+        mrp: '',
+        // For custom product fallback:
         product_name: '',
         brand: '',
         category_id: '',
         unit: 'kg',
-        mrp: '',
-        selling_price: '',
-        stock: '',
         description: '',
         image: null,
     })
 
-    const [previewUrl, setPreviewUrl] = useState(null)   // user-uploaded image preview
+    const [previewUrl, setPreviewUrl] = useState(null) // for custom product image upload
     const [errors, setErrors] = useState({})
 
-    const units = ['kg', 'litre', 'packet', 'piece', 'dozen', 'gram', 'ml']
+    const units = ['kg', 'g', 'litre', 'ml', 'packet', 'piece', 'dozen', 'box', 'can', 'bottle']
 
-    // ── Fetch categories on mount ──────────────────────────
+    // ── 1. Fetch categories & initial catalogue on mount ────────
     useEffect(() => {
-        if (categories.length === 0) dispatch(fetchCategories())
-    }, [dispatch, categories.length])
+        if (categories.length === 0) {
+            dispatch(fetchCategories())
+        }
+        // Load initial catalogue
+        dispatch(searchProducts({
+            category_id: selectedCategory || undefined,
+            search: searchTerm.trim() || undefined,
+            brand: selectedBrand || undefined,
+            section: activeSection === 'recent' ? 'recent' : undefined,
+        }))
+    }, [dispatch])
 
-    // ── Cleanup on unmount ─────────────────────────────────
+    // Cleanup on unmount
     useEffect(() => {
         return () => {
             dispatch(clearSearchResults())
@@ -56,82 +85,98 @@ const AddProduct = ({ onClose }) => {
         }
     }, [dispatch, previewUrl])
 
-    // ── Search with both search term + category filter ─────
-    // Builds params: search, category_id, or both — matches all 3 API variants
-    const handleSearch = () => {
-        const hasSearch = searchTerm.trim().length > 0
-        const hasCategory = searchCategory !== ''
-
-        // Need at least one filter
-        if (!hasSearch && !hasCategory) return
-
+    // ── 2. Refresh catalogue when filters change ────────────────
+    const refreshCatalogue = (catId, term, brand, sec) => {
         dispatch(searchProducts({
-            search: hasSearch ? searchTerm.trim() : undefined,
-            category_id: hasCategory ? searchCategory : undefined,
+            category_id: catId || undefined,
+            search: term?.trim() ? term.trim() : undefined,
+            brand: brand || undefined,
+            section: sec === 'recent' ? 'recent' : undefined,
         }))
     }
 
-    // ── Select existing product ────────────────────────────
-    const handleSelectExisting = (product) => {
-        setSelectedExisting(product)
-
-        // Lock the product image from API — not changeable
-        setExistingImageUrl(product.image || null)
-
-        setFormData({
-            product_id: product.id,
-            product_name: product.name,
-            brand: product.brand || '',
-            category_id: product.category_id || '',
-            unit: 'kg',
-            mrp: '',
-            selling_price: '',
-            stock: '',
-            description: product.description || '',
-            image: null, // user cannot upload image for existing product
-        })
-
-        // Clear any user-uploaded preview
-        if (previewUrl) {
-            URL.revokeObjectURL(previewUrl)
-            setPreviewUrl(null)
-        }
-
-        dispatch(clearSearchResults())
-        setSearchTerm('')
+    const handleCategoryChange = (catId) => {
+        setSelectedCategory(catId)
+        refreshCatalogue(catId, searchTerm, selectedBrand, activeSection)
     }
 
-    // ── Clear existing selection ───────────────────────────
-    const handleClearExisting = () => {
-        setSelectedExisting(null)
-        setExistingImageUrl(null)
-        setFormData({
-            product_id: null,
-            product_name: '',
-            brand: '',
-            category_id: '',
-            unit: 'kg',
-            mrp: '',
-            selling_price: '',
-            stock: '',
-            description: '',
-            image: null,
-        })
-        if (previewUrl) {
-            URL.revokeObjectURL(previewUrl)
-            setPreviewUrl(null)
+    const handleSearchSubmit = (e) => {
+        if (e) e.preventDefault()
+        refreshCatalogue(selectedCategory, searchTerm, selectedBrand, activeSection)
+    }
+
+    const handleSectionChange = (sec) => {
+        setActiveSection(sec)
+        refreshCatalogue(selectedCategory, searchTerm, selectedBrand, sec)
+    }
+
+    const handleBrandChange = (brand) => {
+        setSelectedBrand(brand)
+        refreshCatalogue(selectedCategory, searchTerm, brand, activeSection)
+    }
+
+    // Extract available brands from search results for brand filter dropdown
+    const availableBrands = useMemo(() => {
+        const brands = new Set()
+        if (Array.isArray(searchResults)) {
+            searchResults.forEach((p) => {
+                if (p.brand && p.brand.trim()) brands.add(p.brand.trim())
+            })
+        }
+        return Array.from(brands).sort()
+    }, [searchResults])
+
+    // ── 3. Handle Product Selection from Catalogue ─────────────
+    const handleSelectProduct = (product) => {
+        setSelectedProduct(product)
+
+        // If product has variants, pre-select the first one
+        if (product.variants && product.variants.length > 0) {
+            const firstVar = product.variants[0]
+            setSelectedVariant(firstVar)
+            setFormData((prev) => ({
+                ...prev,
+                mrp: firstVar.mrp || product.price || '',
+                selling_price: firstVar.price || product.sale_price || '',
+                stock: '',
+            }))
+        } else {
+            setSelectedVariant(null)
+            setFormData((prev) => ({
+                ...prev,
+                mrp: product.price || '',
+                selling_price: product.sale_price || '',
+                stock: '',
+            }))
         }
         setErrors({})
     }
 
-    // ── Text input change ──────────────────────────────────
+    // ── 4. Handle Variant Selection ────────────────────────────
+    const handleSelectVariant = (variant) => {
+        setSelectedVariant(variant)
+        setFormData((prev) => ({
+            ...prev,
+            mrp: variant.mrp || selectedProduct?.price || prev.mrp,
+            selling_price: variant.price || selectedProduct?.sale_price || prev.selling_price,
+        }))
+        if (errors.selling_price) setErrors((e) => ({ ...e, selling_price: '' }))
+    }
+
+    const handleBackToCatalogueList = () => {
+        setSelectedProduct(null)
+        setSelectedVariant(null)
+        setErrors({})
+    }
+
+    // ── 5. Form Input Change ───────────────────────────────────
     const handleChange = (e) => {
         const { name, value } = e.target
         setFormData((prev) => ({ ...prev, [name]: value }))
         if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
     }
 
-    // ── Image upload (only for new products) ───────────────
+    // ── 6. Custom Image Upload (Fallback only) ─────────────────
     const handleImageChange = (e) => {
         const file = e.target.files?.[0]
         if (!file) return
@@ -142,48 +187,67 @@ const AddProduct = ({ onClose }) => {
         if (errors.image) setErrors((prev) => ({ ...prev, image: '' }))
     }
 
-    // ── Validation ─────────────────────────────────────────
+    // ── 7. Validation ──────────────────────────────────────────
     const validate = () => {
         const e = {}
 
-        if (!formData.product_name.trim())
-            e.product_name = 'Product name is required'
-
-        if (!formData.brand.trim())
-            e.brand = 'Brand is required'
-
-        if (!formData.category_id)
-            e.category_id = 'Category is required'
-
-        if (!formData.mrp || Number(formData.mrp) <= 0)
-            e.mrp = 'Valid MRP is required'
-
-        if (!formData.selling_price || Number(formData.selling_price) <= 0)
+        if (!formData.selling_price || Number(formData.selling_price) <= 0) {
             e.selling_price = 'Valid selling price is required'
-        else if (Number(formData.selling_price) > Number(formData.mrp))
+        }
+
+        if (formData.mrp && Number(formData.mrp) > 0 && Number(formData.selling_price) > Number(formData.mrp)) {
             e.selling_price = 'Selling price cannot exceed MRP'
+        }
 
-        if (!formData.stock || Number(formData.stock) < 0)
-            e.stock = 'Valid stock quantity is required'
+        if (formData.stock === '' || Number(formData.stock) < 0) {
+            e.stock = 'Valid stock quantity is required (0 or more)'
+        }
 
-        // Image required only for new products
-        // For existing products, the image comes from the API (existingImageUrl)
-        if (!selectedExisting && !formData.image)
-            e.image = 'Product image is required'
+        // Additional validation if in Custom Product Mode
+        if (mode === 'custom') {
+            if (!formData.product_name.trim()) e.product_name = 'Product name is required'
+            if (!formData.brand.trim()) e.brand = 'Brand is required'
+            if (!formData.category_id) e.category_id = 'Category is required'
+            if (!formData.mrp || Number(formData.mrp) <= 0) e.mrp = 'MRP is required'
+            if (!formData.image) e.image = 'Product image is required for custom products'
+        }
 
         setErrors(e)
         return Object.keys(e).length === 0
     }
 
-    // ── Submit ─────────────────────────────────────────────
+    // ── 8. Form Submit ─────────────────────────────────────────
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!validate()) return
 
-        // For existing products, image is sent as URL string (not File)
-        const payload = { ...formData }
-        if (selectedExisting && existingImageUrl) {
-            payload.image = existingImageUrl
+        let payload = {}
+
+        if (mode === 'catalogue') {
+            if (selectedVariant) {
+                // Catalogue variant addition: vendor never typed the name!
+                payload = {
+                    variant_id: selectedVariant.id,
+                    product_id: selectedProduct.id,
+                    selling_price: formData.selling_price,
+                    stock: formData.stock,
+                    mrp: formData.mrp || selectedVariant.mrp || selectedProduct.price,
+                }
+            } else {
+                // Catalogue master product without variant
+                payload = {
+                    product_id: selectedProduct.id,
+                    product_name: selectedProduct.name,
+                    brand: selectedProduct.brand || '',
+                    category_id: selectedProduct.category_id,
+                    selling_price: formData.selling_price,
+                    stock: formData.stock,
+                    mrp: formData.mrp || selectedProduct.price,
+                }
+            }
+        } else {
+            // Custom fallback product
+            payload = { ...formData }
         }
 
         const result = await dispatch(addVendorProduct(payload))
@@ -192,608 +256,966 @@ const AddProduct = ({ onClose }) => {
         }
     }
 
-    // ── Which image to show ────────────────────────────────
-    // existingImageUrl → locked from API (not removable)
-    // previewUrl       → user-uploaded (removable)
-    const displayImage = existingImageUrl || previewUrl
-    const isImageLocked = !!existingImageUrl  // true = existing product image, cannot remove
-
     return (
         <>
             <style>{`
-                .ap-tab-btn {
-                    flex: 1; padding: 0.625rem 1rem;
-                    border: 1.5px solid #e5e7eb; background: white;
-                    border-radius: 10px; cursor: pointer;
-                    font-size: 0.875rem; font-weight: 600;
+                .ap-container {
                     font-family: 'Poppins', sans-serif;
-                    color: #6b7280; transition: all 0.2s;
+                    color: #1f2937;
                 }
-                .ap-tab-btn.active {
-                    border-color: #00204E; background: #f0f4ff; color: #00204E;
+                .ap-header-bar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 1.25rem;
+                    padding-bottom: 0.875rem;
+                    border-bottom: 1px solid #f3f4f6;
+                    flex-wrap: wrap;
+                    gap: 0.75rem;
                 }
-                .ap-tab-btn:hover:not(.active) { background: #f9fafb; }
-
-                /* ── Search area ── */
-                .ap-search-filters {
-                    display: flex; gap: 0.5rem;
-                    margin-top: 0.75rem; flex-wrap: wrap;
+                .ap-toggle-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 0.5rem 0.875rem;
+                    border-radius: 8px;
+                    border: 1.5px solid #00204E;
+                    background: transparent;
+                    color: #00204E;
+                    font-size: 0.8125rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .ap-toggle-btn:hover {
+                    background: #00204E;
+                    color: white;
+                }
+                .ap-cat-pills {
+                    display: flex;
+                    gap: 0.5rem;
+                    overflow-x: auto;
+                    padding-bottom: 0.5rem;
+                    margin-bottom: 1rem;
+                    scrollbar-width: thin;
+                }
+                .ap-cat-pill {
+                    padding: 0.4rem 0.85rem;
+                    border-radius: 20px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    font-size: 0.8125rem;
+                    font-weight: 500;
+                    color: #4b5563;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    transition: all 0.15s;
+                }
+                .ap-cat-pill:hover {
+                    border-color: #00204E;
+                    color: #00204E;
+                }
+                .ap-cat-pill.active {
+                    background: #00204E;
+                    border-color: #00204E;
+                    color: white;
+                    font-weight: 600;
+                }
+                .ap-filter-row {
+                    display: flex;
+                    gap: 0.5rem;
+                    margin-bottom: 1rem;
+                    flex-wrap: wrap;
+                }
+                .ap-search-box {
+                    flex: 1;
+                    min-width: 160px;
+                    position: relative;
                 }
                 .ap-search-input {
-                    flex: 1; min-width: 140px;
-                    border: 1.5px solid #e5e7eb; border-radius: 10px;
-                    padding: 0.625rem 1rem; font-size: 0.875rem;
-                    font-family: 'Poppins', sans-serif; outline: none;
+                    width: 100%;
+                    padding: 0.55rem 0.875rem 0.55rem 2.25rem;
+                    border: 1.5px solid #e5e7eb;
+                    border-radius: 8px;
+                    font-size: 0.84rem;
+                    outline: none;
                 }
                 .ap-search-input:focus {
                     border-color: #34A129;
-                    box-shadow: 0 0 0 3px rgba(52,161,41,0.1);
                 }
-                .ap-search-cat {
-                    min-width: 140px; max-width: 180px;
-                    border: 1.5px solid #e5e7eb; border-radius: 10px;
-                    padding: 0.625rem 0.875rem; font-size: 0.875rem;
-                    font-family: 'Poppins', sans-serif; outline: none;
-                    color: #374151; background: white;
-                }
-                .ap-search-cat:focus {
-                    border-color: #34A129;
-                    box-shadow: 0 0 0 3px rgba(52,161,41,0.1);
-                }
-                .ap-search-btn {
-                    padding: 0.625rem 1.25rem; border: none;
-                    border-radius: 10px; background: #00204E;
-                    color: white; font-weight: 600; cursor: pointer;
-                    font-family: 'Poppins', sans-serif; font-size: 0.875rem;
-                    display: flex; align-items: center; gap: 6px;
-                    white-space: nowrap;
-                }
-                .ap-search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-                .ap-search-results {
-                    max-height: 200px; overflow-y: auto;
-                    border: 1px solid #e5e7eb; border-radius: 10px;
-                    margin-top: 0.75rem;
-                }
-                .ap-search-item {
-                    display: flex; align-items: center; gap: 0.75rem;
-                    padding: 0.75rem; border-bottom: 1px solid #f3f4f6;
-                    cursor: pointer; transition: background 0.15s;
-                }
-                .ap-search-item:last-child { border-bottom: none; }
-                .ap-search-item:hover { background: #f9fafb; }
-                .ap-search-img {
-                    width: 40px; height: 40px; border-radius: 8px;
-                    object-fit: cover; border: 1px solid #e5e7eb;
-                    flex-shrink: 0;
-                }
-                .ap-search-ph {
-                    width: 40px; height: 40px; border-radius: 8px;
-                    background: #f3f4f6; display: flex; flex-shrink: 0;
-                    align-items: center; justify-content: center;
+                .ap-search-icon {
+                    position: absolute;
+                    left: 0.75rem;
+                    top: 50%;
+                    transform: translateY(-50%);
                     color: #9ca3af;
                 }
-
-                /* ── Selected banner ── */
-                .ap-selected-banner {
-                    display: flex; align-items: center;
-                    justify-content: space-between; gap: 8px;
-                    background: #f0fdf4; border: 1px solid #bbf7d0;
-                    border-radius: 10px; padding: 0.75rem 1rem;
-                    margin-top: 0.75rem; font-size: 0.875rem;
+                .ap-select-filter {
+                    border: 1.5px solid #e5e7eb;
+                    border-radius: 8px;
+                    padding: 0.55rem 0.75rem;
+                    font-size: 0.84rem;
+                    outline: none;
+                    background: white;
+                    color: #374151;
+                }
+                .ap-section-tabs {
+                    display: flex;
+                    gap: 0.35rem;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 8px;
+                    padding: 2px;
+                    background: #f9fafb;
+                }
+                .ap-sec-btn {
+                    padding: 0.4rem 0.75rem;
+                    border-radius: 6px;
+                    border: none;
+                    background: transparent;
+                    font-size: 0.78rem;
+                    font-weight: 600;
+                    color: #6b7280;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                .ap-sec-btn.active {
+                    background: white;
+                    color: #00204E;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+                }
+                /* Catalogue product cards */
+                .ap-catalogue-grid {
+                    max-height: 380px;
+                    overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.625rem;
+                    border: 1px solid #f3f4f6;
+                    border-radius: 10px;
+                    padding: 0.5rem;
+                    background: #fafafa;
+                }
+                .ap-card {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    background: white;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 10px;
+                    padding: 0.75rem 1rem;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .ap-card:hover {
+                    border-color: #34A129;
+                    box-shadow: 0 3px 10px rgba(52,161,41,0.12);
+                    transform: translateY(-1px);
+                }
+                .ap-card-img {
+                    width: 52px;
+                    height: 52px;
+                    border-radius: 8px;
+                    object-fit: cover;
+                    border: 1px solid #e5e7eb;
+                    margin-right: 0.875rem;
+                    flex-shrink: 0;
+                }
+                .ap-card-ph {
+                    width: 52px;
+                    height: 52px;
+                    border-radius: 8px;
+                    background: #f3f4f6;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #9ca3af;
+                    margin-right: 0.875rem;
+                    flex-shrink: 0;
+                }
+                .ap-card-title {
+                    font-weight: 600;
+                    font-size: 0.9375rem;
+                    color: #00204E;
+                    margin-bottom: 2px;
+                }
+                .ap-card-meta {
+                    font-size: 0.75rem;
+                    color: #6b7280;
+                    display: flex;
+                    gap: 0.5rem;
+                    align-items: center;
+                }
+                .ap-tag-badge {
+                    background: #eef2ff;
+                    color: #3730a3;
+                    padding: 2px 7px;
+                    border-radius: 4px;
+                    font-size: 0.72rem;
+                    font-weight: 600;
+                }
+                .ap-variants-badge {
+                    background: #ecfdf5;
                     color: #065f46;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    font-size: 0.72rem;
+                    font-weight: 600;
+                    border: 1px solid #a7f3d0;
                 }
-                .ap-selected-clear {
-                    background: none; border: none; cursor: pointer;
-                    color: #065f46; font-size: 0.75rem; font-weight: 600;
-                    font-family: 'Poppins', sans-serif;
-                    display: flex; align-items: center; gap: 4px;
-                    padding: 2px 6px; border-radius: 6px;
-                    transition: background 0.15s; white-space: nowrap;
+                /* Selected product & variant screen */
+                .ap-selected-banner {
+                    background: #f8fafc;
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 1rem;
+                    margin-bottom: 1.25rem;
                 }
-                .ap-selected-clear:hover { background: #dcfce7; }
-
-                /* ── Form fields ── */
+                .ap-variant-chips {
+                    display: flex;
+                    gap: 0.5rem;
+                    flex-wrap: wrap;
+                    margin-top: 0.5rem;
+                }
+                .ap-var-chip {
+                    padding: 0.5rem 1rem;
+                    border-radius: 8px;
+                    border: 2px solid #e5e7eb;
+                    background: white;
+                    cursor: pointer;
+                    font-size: 0.84rem;
+                    font-weight: 600;
+                    color: #374151;
+                    transition: all 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .ap-var-chip:hover {
+                    border-color: #34A129;
+                }
+                .ap-var-chip.active {
+                    border-color: #34A129;
+                    background: #f0fdf4;
+                    color: #166534;
+                    box-shadow: 0 2px 6px rgba(52,161,41,0.2);
+                }
                 .ap-label {
-                    font-size: 0.8125rem; font-weight: 600;
-                    color: #374151; margin-bottom: 6px; display: block;
+                    font-size: 0.8125rem;
+                    font-weight: 600;
+                    color: #374151;
+                    margin-bottom: 6px;
+                    display: block;
                 }
                 .ap-label span { color: #ef4444; margin-left: 2px; }
-
                 .ap-input, .ap-select, .ap-textarea {
-                    width: 100%; border: 1.5px solid #e5e7eb;
-                    border-radius: 10px; padding: 0.625rem 0.875rem;
-                    font-size: 0.875rem; font-family: 'Poppins', sans-serif;
-                    color: #111827; outline: none; transition: all 0.2s;
+                    width: 100%;
+                    border: 1.5px solid #e5e7eb;
+                    border-radius: 8px;
+                    padding: 0.625rem 0.875rem;
+                    font-size: 0.875rem;
+                    outline: none;
+                    transition: all 0.2s;
                 }
                 .ap-input:focus, .ap-select:focus, .ap-textarea:focus {
                     border-color: #34A129;
                     box-shadow: 0 0 0 3px rgba(52,161,41,0.1);
                 }
                 .ap-input.error, .ap-select.error { border-color: #ef4444; }
-                .ap-input:disabled, .ap-select:disabled, .ap-textarea:disabled {
-                    background: #f9fafb; color: #6b7280; cursor: not-allowed;
+                .ap-input:disabled {
+                    background: #f9fafb;
+                    color: #6b7280;
+                    cursor: not-allowed;
                 }
-                .ap-textarea { resize: vertical; min-height: 80px; }
-
                 .ap-error {
-                    display: flex; align-items: center; gap: 4px;
-                    margin-top: 0.375rem; font-size: 0.78rem;
-                    color: #ef4444; font-weight: 500;
+                    color: #ef4444;
+                    font-size: 0.78rem;
+                    margin-top: 4px;
+                    font-weight: 500;
                 }
-
-                /* ── Image zone ── */
                 .ap-upload-zone {
-                    border: 2px dashed #e5e7eb; border-radius: 12px;
-                    padding: 2rem; text-align: center; cursor: pointer;
-                    transition: all 0.2s; position: relative;
+                    border: 2px dashed #e5e7eb;
+                    border-radius: 10px;
+                    padding: 1.5rem;
+                    text-align: center;
+                    cursor: pointer;
+                    position: relative;
                 }
                 .ap-upload-zone:hover {
-                    border-color: #34A129; background: #f0fdf4;
+                    border-color: #34A129;
+                    background: #f0fdf4;
                 }
                 .ap-upload-zone input {
-                    position: absolute; inset: 0; opacity: 0;
-                    cursor: pointer; width: 100%; height: 100%;
+                    position: absolute;
+                    inset: 0;
+                    opacity: 0;
+                    cursor: pointer;
                 }
-                .ap-upload-icon {
-                    width: 48px; height: 48px; border-radius: 12px;
-                    background: #f3f4f6; margin: 0 auto 12px;
-                    display: flex; align-items: center; justify-content: center;
-                    color: #6b7280; font-size: 1.25rem;
-                }
-                .ap-upload-text {
-                    font-size: 0.875rem; font-weight: 500;
-                    color: #374151; margin: 0 0 4px;
-                }
-                .ap-upload-hint { font-size: 0.75rem; color: #9ca3af; margin: 0; }
-
-                /* ── Image preview ── */
                 .ap-preview-wrap {
-                    position: relative; display: inline-block; width: 100%;
+                    position: relative;
+                    width: 100%;
                 }
                 .ap-preview {
-                    width: 100%; height: 160px; object-fit: cover;
-                    border-radius: 10px; border: 1px solid #e5e7eb;
-                    display: block;
-                }
-                .ap-preview-badge {
-                    position: absolute; top: 8px; left: 8px;
-                    background: rgba(0,32,78,0.75); color: white;
-                    font-size: 0.7rem; font-weight: 600; padding: 3px 8px;
-                    border-radius: 6px; pointer-events: none;
+                    width: 100%;
+                    height: 150px;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    border: 1px solid #e5e7eb;
                 }
                 .ap-preview-remove {
-                    position: absolute; top: 8px; right: 8px;
-                    background: rgba(0,0,0,0.7); color: white;
-                    border: none; border-radius: 6px;
-                    padding: 4px 10px; cursor: pointer;
-                    font-size: 0.75rem; font-weight: 600;
-                    display: flex; align-items: center; gap: 4px;
+                    position: absolute;
+                    top: 8px;
+                    right: 8px;
+                    background: rgba(0,0,0,0.7);
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 4px 8px;
+                    font-size: 0.72rem;
+                    cursor: pointer;
                 }
-
-                /* ── Footer ── */
                 .ap-footer {
-                    display: flex; justify-content: flex-end; gap: 0.625rem;
-                    margin-top: 1.75rem; padding-top: 1.25rem;
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 0.625rem;
+                    margin-top: 1.5rem;
+                    padding-top: 1rem;
                     border-top: 1px solid #f3f4f6;
                 }
                 .ap-btn {
-                    display: inline-flex; align-items: center; gap: 6px;
-                    padding: 0.625rem 1.375rem; border-radius: 10px;
-                    border: none; font-size: 0.875rem; font-weight: 600;
-                    font-family: 'Poppins', sans-serif; cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 0.625rem 1.25rem;
+                    border-radius: 8px;
+                    border: none;
+                    font-size: 0.875rem;
+                    font-weight: 600;
+                    cursor: pointer;
                     transition: all 0.2s;
                 }
-                .ap-btn:disabled { opacity: 0.6; cursor: not-allowed; }
                 .ap-btn-cancel {
-                    background: #f3f4f6; color: #374151;
-                    border: 1.5px solid #e5e7eb;
+                    background: #f3f4f6;
+                    color: #374151;
                 }
-                .ap-btn-cancel:hover:not(:disabled) { background: #e5e7eb; }
                 .ap-btn-save {
                     background: linear-gradient(135deg, #00204E, #34A129);
-                    color: white; box-shadow: 0 4px 14px rgba(0,32,78,0.28);
+                    color: white;
+                    box-shadow: 0 3px 12px rgba(0,32,78,0.25);
                 }
-                .ap-btn-save:hover:not(:disabled) {
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 20px rgba(0,32,78,0.38);
-                }
-                .ap-action-error {
-                    background: #fef2f2; color: #991b1b;
-                    border: 1px solid #fecaca; border-radius: 10px;
-                    padding: 0.75rem 1rem; font-size: 0.8125rem;
-                    font-weight: 500; margin-bottom: 1rem;
-                }
+                .ap-btn:disabled { opacity: 0.6; cursor: not-allowed; }
                 .ap-spinner {
-                    width: 14px; height: 14px;
+                    width: 14px;
+                    height: 14px;
                     border: 2px solid rgba(255,255,255,0.4);
-                    border-top-color: white; border-radius: 50%;
+                    border-top-color: white;
+                    border-radius: 50%;
                     animation: ap-spin 0.75s linear infinite;
                 }
                 @keyframes ap-spin { to { transform: rotate(360deg); } }
             `}</style>
 
-            <form onSubmit={handleSubmit}>
+            <div className="ap-container">
+                {/* ── Header / Mode switch ─────────────────────────── */}
+                <div className="ap-header-bar">
+                    <div>
+                        <h6 style={{ margin: 0, fontWeight: 700, color: '#00204E' }}>
+                            {mode === 'catalogue'
+                                ? (selectedProduct ? 'Set Your Price & Stock' : 'Select from Master Catalogue')
+                                : 'Add Custom Product'}
+                        </h6>
+                        <small style={{ color: '#6b7280' }}>
+                            {mode === 'catalogue'
+                                ? 'Pick an existing product from catalogue — no typing needed!'
+                                : 'Genuinely new product not present in our master catalogue'}
+                        </small>
+                    </div>
 
-                {/* ── Mode tabs ─────────────────────────────────────── */}
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                    <button
-                        type="button"
-                        className={`ap-tab-btn ${mode === 'new' ? 'active' : ''}`}
-                        onClick={() => {
-                            setMode('new')
-                            handleClearExisting()
-                            dispatch(clearSearchResults())
-                        }}
-                    >
-                        Create New Product
-                    </button>
-                    <button
-                        type="button"
-                        className={`ap-tab-btn ${mode === 'existing' ? 'active' : ''}`}
-                        onClick={() => setMode('existing')}
-                    >
-                        Add Existing Product
-                    </button>
+                    {mode === 'catalogue' ? (
+                        <button
+                            type="button"
+                            className="ap-toggle-btn"
+                            onClick={() => {
+                                setMode('custom')
+                                setSelectedProduct(null)
+                                setSelectedVariant(null)
+                                setErrors({})
+                            }}
+                        >
+                            <FaPlus size={11} />
+                            Add product not in catalogue
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            className="ap-toggle-btn"
+                            onClick={() => {
+                                setMode('catalogue')
+                                setErrors({})
+                            }}
+                        >
+                            <FaArrowLeft size={11} />
+                            Back to Master Catalogue
+                        </button>
+                    )}
                 </div>
 
-                {/* ── Existing product search ────────────────────────── */}
-                {mode === 'existing' && (
+                {/* ── Action Error Display ─────────────────────────── */}
+                {actionError && (
+                    <div style={{
+                        background: '#fef2f2',
+                        color: '#991b1b',
+                        padding: '0.625rem 0.875rem',
+                        borderRadius: 8,
+                        fontSize: '0.8125rem',
+                        marginBottom: '1rem',
+                        border: '1px solid #fecaca',
+                    }}>
+                        ⚠️ {actionError}
+                    </div>
+                )}
+
+                {/* =================================================== */}
+                {/* FLOW 1: MASTER CATALOGUE (Default & Recommended)    */}
+                {/* =================================================== */}
+                {mode === 'catalogue' && !selectedProduct && (
                     <>
-                        {/* Search bar: text input + category dropdown + button */}
-                        <div className="ap-search-filters">
-
-                            {/* Text search */}
-                            <input
-                                type="text"
-                                className="ap-search-input"
-                                placeholder="Search by name…"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault()
-                                        handleSearch()
-                                    }
-                                }}
-                            />
-
-                            {/* Category filter */}
-                            <select
-                                className="ap-search-cat"
-                                value={searchCategory}
-                                onChange={(e) => setSearchCategory(e.target.value)}
-                            >
-                                <option value="">All Categories</option>
-                                {categories.map((c) => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </select>
-
-                            {/* Search button */}
+                        {/* 1. Category Pills */}
+                        <div className="ap-cat-pills">
                             <button
                                 type="button"
-                                className="ap-search-btn"
-                                onClick={handleSearch}
-                                disabled={
-                                    searchLoading ||
-                                    (!searchTerm.trim() && searchCategory === '')
-                                }
+                                className={`ap-cat-pill ${selectedCategory === '' ? 'active' : ''}`}
+                                onClick={() => handleCategoryChange('')}
                             >
-                                {searchLoading ? (
-                                    <>
-                                        <span className="ap-spinner"
-                                            style={{ width: 16, height: 16 }} />
-                                        Searching…
-                                    </>
-                                ) : (
-                                    <>
-                                        <FaSearch size={13} />
-                                        Search
-                                    </>
-                                )}
+                                All Categories
                             </button>
+                            {categories.map((c) => (
+                                <button
+                                    key={c.id}
+                                    type="button"
+                                    className={`ap-cat-pill ${selectedCategory === String(c.id) ? 'active' : ''}`}
+                                    onClick={() => handleCategoryChange(String(c.id))}
+                                >
+                                    {c.name}
+                                </button>
+                            ))}
                         </div>
 
-                        {/* Results list */}
-                        {searchResults.length > 0 && (
-                            <div className="ap-search-results">
-                                {searchResults.map((p) => (
-                                    <div
-                                        key={p.id}
-                                        className="ap-search-item"
-                                        onClick={() => handleSelectExisting(p)}
-                                    >
-                                        {p.image ? (
-                                            <img
-                                                src={p.image}
-                                                alt={p.name}
-                                                className="ap-search-img"
-                                            />
-                                        ) : (
-                                            <div className="ap-search-ph">
-                                                <FaBox size={16} />
-                                            </div>
-                                        )}
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{
-                                                fontWeight: 600, fontSize: '0.875rem',
-                                                color: '#00204E', marginBottom: 2,
-                                                overflow: 'hidden', textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                            }}>
-                                                {p.name}
-                                            </div>
-                                            <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                                                {p.category_name}
-                                                {p.price ? ` • ₹${p.price}` : ''}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        {/* 2. Search, Brand Filter & Section Tabs */}
+                        <div className="ap-filter-row">
+                            <form onSubmit={handleSearchSubmit} className="ap-search-box">
+                                <FaSearch className="ap-search-icon" size={13} />
+                                <input
+                                    type="text"
+                                    className="ap-search-input"
+                                    placeholder="Search catalogue by name or SKU…"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </form>
 
-                        {/* Selected product banner */}
-                        {selectedExisting && (
-                            <div className="ap-selected-banner">
-                                <span>
-                                    ✓ Selected: <strong>{selectedExisting.name}</strong>
-                                    {' '}— Fill in your pricing and stock below
-                                </span>
+                            {/* Brand dropdown filter */}
+                            {availableBrands.length > 0 && (
+                                <select
+                                    className="ap-select-filter"
+                                    value={selectedBrand}
+                                    onChange={(e) => handleBrandChange(e.target.value)}
+                                >
+                                    <option value="">All Brands</option>
+                                    {availableBrands.map((b) => (
+                                        <option key={b} value={b}>{b}</option>
+                                    ))}
+                                </select>
+                            )}
+
+                            {/* Section tabs: All vs Recently Added */}
+                            <div className="ap-section-tabs">
                                 <button
                                     type="button"
-                                    className="ap-selected-clear"
-                                    onClick={handleClearExisting}
+                                    className={`ap-sec-btn ${activeSection === 'all' ? 'active' : ''}`}
+                                    onClick={() => handleSectionChange('all')}
                                 >
-                                    <FaTimes size={10} /> Change
+                                    All Products
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`ap-sec-btn ${activeSection === 'recent' ? 'active' : ''}`}
+                                    onClick={() => handleSectionChange('recent')}
+                                >
+                                    <FaClock size={11} /> Recently Added
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 3. Master Catalogue Results List */}
+                        {searchLoading ? (
+                            <div style={{ textAlign: 'center', padding: '2.5rem', color: '#6b7280' }}>
+                                <span className="ap-spinner" style={{ borderColor: '#00204E', borderTopColor: 'transparent', width: 22, height: 22, display: 'inline-block', marginBottom: 8 }} />
+                                <div style={{ fontSize: '0.875rem' }}>Loading master catalogue products…</div>
+                            </div>
+                        ) : searchResults.length > 0 ? (
+                            <div className="ap-catalogue-grid">
+                                {searchResults.map((product) => {
+                                    const variantCount = product.variants?.length || 0
+                                    return (
+                                        <div
+                                            key={product.id}
+                                            className="ap-card"
+                                            onClick={() => handleSelectProduct(product)}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                                                {product.image ? (
+                                                    <img
+                                                        src={product.image}
+                                                        alt={product.name}
+                                                        className="ap-card-img"
+                                                    />
+                                                ) : (
+                                                    <div className="ap-card-ph">
+                                                        <FaBox size={18} />
+                                                    </div>
+                                                )}
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div className="ap-card-title text-truncate">
+                                                        {product.name}
+                                                    </div>
+                                                    <div className="ap-card-meta">
+                                                        {product.brand && (
+                                                            <span className="ap-tag-badge">
+                                                                <FaTag size={9} style={{ marginRight: 3 }} />
+                                                                {product.brand}
+                                                            </span>
+                                                        )}
+                                                        <span>{product.category_name}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+                                                {variantCount > 0 ? (
+                                                    <span className="ap-variants-badge">
+                                                        <FaBoxes size={10} style={{ marginRight: 4 }} />
+                                                        {variantCount} Pack Size{variantCount > 1 ? 's' : ''}
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ fontSize: '0.8125rem', color: '#00204E', fontWeight: 600 }}>
+                                                        Select
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        ) : (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '2.5rem 1rem',
+                                background: '#f9fafb',
+                                borderRadius: 10,
+                                border: '1px dashed #e5e7eb',
+                            }}>
+                                <FaBox size={28} style={{ color: '#9ca3af', marginBottom: 10 }} />
+                                <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                                    No products found in catalogue
+                                </div>
+                                <p style={{ fontSize: '0.8125rem', color: '#6b7280', marginBottom: 12 }}>
+                                    Try different filters or add it as a new product not in our catalogue.
+                                </p>
+                                <button
+                                    type="button"
+                                    className="ap-toggle-btn"
+                                    onClick={() => setMode('custom')}
+                                >
+                                    <FaPlus size={11} /> Add product not in catalogue
                                 </button>
                             </div>
                         )}
                     </>
                 )}
 
-                {/* ── Action error ───────────────────────────────────── */}
-                {actionError && (
-                    <div className="ap-action-error" style={{ marginTop: '1rem' }}>
-                        ⚠️ {actionError}
-                    </div>
+                {/* =================================================== */}
+                {/* FLOW 1B: SELECTED CATALOGUE PRODUCT -> VARIANT & PRICING */}
+                {/* =================================================== */}
+                {mode === 'catalogue' && selectedProduct && (
+                    <form onSubmit={handleSubmit}>
+                        {/* Selected Product Summary Banner */}
+                        <div className="ap-selected-banner">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    {selectedProduct.image ? (
+                                        <img
+                                            src={selectedProduct.image}
+                                            alt={selectedProduct.name}
+                                            style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover' }}
+                                        />
+                                    ) : (
+                                        <div style={{ width: 44, height: 44, borderRadius: 8, background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
+                                            <FaBox size={16} />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: '#00204E' }}>
+                                            {selectedProduct.name}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                                            {selectedProduct.brand ? `${selectedProduct.brand} • ` : ''}
+                                            {selectedProduct.category_name}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={handleBackToCatalogueList}
+                                    style={{
+                                        background: '#fff',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: 6,
+                                        padding: '4px 10px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Change Product
+                                </button>
+                            </div>
+
+                            {/* Variant / Pack Size Selector */}
+                            {selectedProduct.variants && selectedProduct.variants.length > 0 ? (
+                                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
+                                    <label style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1e293b', marginBottom: 6, display: 'block' }}>
+                                        Select Pack Size / Variant:
+                                    </label>
+                                    <div className="ap-variant-chips">
+                                        {selectedProduct.variants.map((v) => {
+                                            const isSelected = selectedVariant?.id === v.id
+                                            return (
+                                                <button
+                                                    key={v.id}
+                                                    type="button"
+                                                    className={`ap-var-chip ${isSelected ? 'active' : ''}`}
+                                                    onClick={() => handleSelectVariant(v)}
+                                                >
+                                                    {isSelected && <FaCheck size={11} />}
+                                                    <span>{v.variant_name}</span>
+                                                    {v.mrp && <small style={{ color: '#6b7280' }}>(MRP ₹{v.mrp})</small>}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        {/* Vendor Pricing & Stock Inputs (The only inputs needed!) */}
+                        <Row className="g-3">
+                            <Col md={6}>
+                                <label className="ap-label">
+                                    Your Selling Price (₹) <span>*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    name="selling_price"
+                                    className={`ap-input ${errors.selling_price ? 'error' : ''}`}
+                                    placeholder="Enter your selling price"
+                                    value={formData.selling_price}
+                                    onChange={handleChange}
+                                    step="0.01"
+                                    min="0.01"
+                                    autoFocus
+                                />
+                                {errors.selling_price && <p className="ap-error">⚠ {errors.selling_price}</p>}
+                            </Col>
+
+                            <Col md={6}>
+                                <label className="ap-label">
+                                    Available Stock Quantity <span>*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    name="stock"
+                                    className={`ap-input ${errors.stock ? 'error' : ''}`}
+                                    placeholder="e.g. 25"
+                                    value={formData.stock}
+                                    onChange={handleChange}
+                                    min="0"
+                                />
+                                {errors.stock && <p className="ap-error">⚠ {errors.stock}</p>}
+                            </Col>
+
+                            {/* Informational / Read-only Fields inherited automatically */}
+                            <Col md={6}>
+                                <label className="ap-label">MRP (₹)</label>
+                                <input
+                                    type="number"
+                                    name="mrp"
+                                    className="ap-input"
+                                    value={formData.mrp}
+                                    onChange={handleChange}
+                                    step="0.01"
+                                    placeholder="Optional / Inherited from pack size"
+                                />
+                            </Col>
+
+                            <Col md={6}>
+                                <label className="ap-label">Product Name in Inventory</label>
+                                <input
+                                    type="text"
+                                    className="ap-input"
+                                    disabled
+                                    value={
+                                        selectedVariant
+                                            ? `${selectedProduct.name} ${selectedVariant.variant_name}`
+                                            : selectedProduct.name
+                                    }
+                                />
+                            </Col>
+                        </Row>
+
+                        <div className="ap-footer">
+                            <button
+                                type="button"
+                                className="ap-btn ap-btn-cancel"
+                                onClick={handleBackToCatalogueList}
+                                disabled={actionLoading}
+                            >
+                                <FaArrowLeft size={12} /> Back
+                            </button>
+                            <button
+                                type="submit"
+                                className="ap-btn ap-btn-save"
+                                disabled={actionLoading}
+                            >
+                                {actionLoading ? (
+                                    <>
+                                        <span className="ap-spinner" />
+                                        Adding…
+                                    </>
+                                ) : (
+                                    <>
+                                        <FaSave size={13} />
+                                        Add to My Store
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
                 )}
 
-                {/* ── Form fields ────────────────────────────────────── */}
-                <Row className="g-3" style={{ marginTop: '0.5rem' }}>
+                {/* =================================================== */}
+                {/* FLOW 2: CUSTOM PRODUCT FALLBACK (Not in Catalogue)   */}
+                {/* =================================================== */}
+                {mode === 'custom' && (
+                    <form onSubmit={handleSubmit}>
+                        <div style={{
+                            background: '#fffbeb',
+                            border: '1px solid #fde68a',
+                            borderRadius: 8,
+                            padding: '0.625rem 0.875rem',
+                            fontSize: '0.8125rem',
+                            color: '#92400e',
+                            marginBottom: '1rem',
+                        }}>
+                            ℹ️ Use this form only if this product does not exist anywhere in the Master Catalogue.
+                        </div>
 
-                    {/* Product name */}
-                    <Col md={6}>
-                        <label className="ap-label">
-                            Product Name <span>*</span>
-                        </label>
-                        <input
-                            type="text"
-                            name="product_name"
-                            className={`ap-input ${errors.product_name ? 'error' : ''}`}
-                            placeholder="e.g. Amul Gold Milk"
-                            value={formData.product_name}
-                            onChange={handleChange}
-                            disabled={!!selectedExisting}
-                        />
-                        {errors.product_name && (
-                            <p className="ap-error">⚠ {errors.product_name}</p>
-                        )}
-                    </Col>
-
-                    {/* Brand */}
-                    <Col md={6}>
-                        <label className="ap-label">
-                            Brand <span>*</span>
-                        </label>
-                        <input
-                            type="text"
-                            name="brand"
-                            className={`ap-input ${errors.brand ? 'error' : ''}`}
-                            placeholder="e.g. Amul"
-                            value={formData.brand}
-                            onChange={handleChange}
-                        />
-                        {errors.brand && (
-                            <p className="ap-error">⚠ {errors.brand}</p>
-                        )}
-                    </Col>
-
-                    {/* Category */}
-                    <Col md={6}>
-                        <label className="ap-label">
-                            Category <span>*</span>
-                        </label>
-                        <select
-                            name="category_id"
-                            className={`ap-select ${errors.category_id ? 'error' : ''}`}
-                            value={formData.category_id}
-                            onChange={handleChange}
-                            disabled={!!selectedExisting}
-                        >
-                            <option value="">Select category</option>
-                            {categories.map((c) => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                        </select>
-                        {errors.category_id && (
-                            <p className="ap-error">⚠ {errors.category_id}</p>
-                        )}
-                    </Col>
-
-                    {/* Unit */}
-                    <Col md={6}>
-                        <label className="ap-label">
-                            Unit <span>*</span>
-                        </label>
-                        <select
-                            name="unit"
-                            className="ap-select"
-                            value={formData.unit}
-                            onChange={handleChange}
-                        >
-                            {units.map((u) => (
-                                <option key={u} value={u}>{u}</option>
-                            ))}
-                        </select>
-                    </Col>
-
-                    {/* MRP */}
-                    <Col md={4}>
-                        <label className="ap-label">MRP (₹) <span>*</span></label>
-                        <input
-                            type="number"
-                            name="mrp"
-                            className={`ap-input ${errors.mrp ? 'error' : ''}`}
-                            placeholder="0.00"
-                            value={formData.mrp}
-                            onChange={handleChange}
-                            step="0.01" min="0"
-                        />
-                        {errors.mrp && <p className="ap-error">⚠ {errors.mrp}</p>}
-                    </Col>
-
-                    {/* Selling price */}
-                    <Col md={4}>
-                        <label className="ap-label">
-                            Selling Price (₹) <span>*</span>
-                        </label>
-                        <input
-                            type="number"
-                            name="selling_price"
-                            className={`ap-input ${errors.selling_price ? 'error' : ''}`}
-                            placeholder="0.00"
-                            value={formData.selling_price}
-                            onChange={handleChange}
-                            step="0.01" min="0"
-                        />
-                        {errors.selling_price && (
-                            <p className="ap-error">⚠ {errors.selling_price}</p>
-                        )}
-                    </Col>
-
-                    {/* Stock */}
-                    <Col md={4}>
-                        <label className="ap-label">
-                            Stock Quantity <span>*</span>
-                        </label>
-                        <input
-                            type="number"
-                            name="stock"
-                            className={`ap-input ${errors.stock ? 'error' : ''}`}
-                            placeholder="0"
-                            value={formData.stock}
-                            onChange={handleChange}
-                            min="0"
-                        />
-                        {errors.stock && <p className="ap-error">⚠ {errors.stock}</p>}
-                    </Col>
-
-                    {/* Description */}
-                    <Col md={12}>
-                        <label className="ap-label">Description</label>
-                        <textarea
-                            name="description"
-                            className="ap-textarea"
-                            placeholder="Product description (optional)"
-                            value={formData.description}
-                            onChange={handleChange}
-                            rows={3}
-                        />
-                    </Col>
-
-                    {/* ── Image section ──────────────────────────────── */}
-                    <Col md={12}>
-                        <label className="ap-label">
-                            Product Image <span>*</span>
-                        </label>
-
-                        {displayImage ? (
-                            /* Preview — locked (existing) or removable (new) */
-                            <div className="ap-preview-wrap">
-                                <img
-                                    src={displayImage}
-                                    alt="Product preview"
-                                    className="ap-preview"
-                                />
-
-                                {/* Badge: locked image from existing product */}
-                                {isImageLocked && (
-                                    <span className="ap-preview-badge">
-                                        🔒 Product Image
-                                    </span>
-                                )}
-
-                                {/* Remove button: only for user-uploaded images */}
-                                {!isImageLocked && (
-                                    <button
-                                        type="button"
-                                        className="ap-preview-remove"
-                                        onClick={() => {
-                                            URL.revokeObjectURL(previewUrl)
-                                            setPreviewUrl(null)
-                                            setFormData((p) => ({ ...p, image: null }))
-                                        }}
-                                    >
-                                        <FaTimes size={10} /> Remove
-                                    </button>
-                                )}
-                            </div>
-                        ) : (
-                            /* Upload zone: only shown when no image exists */
-                            <div className="ap-upload-zone">
+                        <Row className="g-3">
+                            <Col md={6}>
+                                <label className="ap-label">
+                                    Product Name <span>*</span>
+                                </label>
                                 <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleImageChange}
+                                    type="text"
+                                    name="product_name"
+                                    className={`ap-input ${errors.product_name ? 'error' : ''}`}
+                                    placeholder="e.g. Organic Brown Rice"
+                                    value={formData.product_name}
+                                    onChange={handleChange}
                                 />
-                                <div className="ap-upload-icon">
-                                    <FaCamera />
-                                </div>
-                                <p className="ap-upload-text">
-                                    Click to upload product image
-                                </p>
-                                <p className="ap-upload-hint">PNG, JPG up to 5 MB</p>
-                            </div>
-                        )}
+                                {errors.product_name && <p className="ap-error">⚠ {errors.product_name}</p>}
+                            </Col>
 
-                        {errors.image && (
-                            <p className="ap-error">⚠ {errors.image}</p>
-                        )}
-                    </Col>
-                </Row>
+                            <Col md={6}>
+                                <label className="ap-label">
+                                    Brand <span>*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="brand"
+                                    className={`ap-input ${errors.brand ? 'error' : ''}`}
+                                    placeholder="e.g. Nature Best"
+                                    value={formData.brand}
+                                    onChange={handleChange}
+                                />
+                                {errors.brand && <p className="ap-error">⚠ {errors.brand}</p>}
+                            </Col>
 
-                {/* ── Footer ────────────────────────────────────────── */}
-                <div className="ap-footer">
-                    <button
-                        type="button"
-                        className="ap-btn ap-btn-cancel"
-                        onClick={() => onClose(false)}
-                        disabled={actionLoading}
-                    >
-                        <FaTimes size={13} />
-                        {t('common.cancel') || 'Cancel'}
-                    </button>
-                    <button
-                        type="submit"
-                        className="ap-btn ap-btn-save"
-                        disabled={actionLoading}
-                    >
-                        {actionLoading ? (
-                            <>
-                                <span className="ap-spinner" />
-                                Adding…
-                            </>
-                        ) : (
-                            <>
-                                <FaSave size={13} />
-                                {t('common.save') || 'Add Product'}
-                            </>
-                        )}
-                    </button>
-                </div>
-            </form>
+                            <Col md={6}>
+                                <label className="ap-label">
+                                    Category <span>*</span>
+                                </label>
+                                <select
+                                    name="category_id"
+                                    className={`ap-select ${errors.category_id ? 'error' : ''}`}
+                                    value={formData.category_id}
+                                    onChange={handleChange}
+                                >
+                                    <option value="">Select Category</option>
+                                    {categories.map((c) => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                                {errors.category_id && <p className="ap-error">⚠ {errors.category_id}</p>}
+                            </Col>
+
+                            <Col md={6}>
+                                <label className="ap-label">
+                                    Unit / Pack Size <span>*</span>
+                                </label>
+                                <select
+                                    name="unit"
+                                    className="ap-select"
+                                    value={formData.unit}
+                                    onChange={handleChange}
+                                >
+                                    {units.map((u) => (
+                                        <option key={u} value={u}>{u}</option>
+                                    ))}
+                                </select>
+                            </Col>
+
+                            <Col md={4}>
+                                <label className="ap-label">
+                                    MRP (₹) <span>*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    name="mrp"
+                                    className={`ap-input ${errors.mrp ? 'error' : ''}`}
+                                    placeholder="0.00"
+                                    value={formData.mrp}
+                                    onChange={handleChange}
+                                    step="0.01"
+                                    min="0"
+                                />
+                                {errors.mrp && <p className="ap-error">⚠ {errors.mrp}</p>}
+                            </Col>
+
+                            <Col md={4}>
+                                <label className="ap-label">
+                                    Selling Price (₹) <span>*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    name="selling_price"
+                                    className={`ap-input ${errors.selling_price ? 'error' : ''}`}
+                                    placeholder="0.00"
+                                    value={formData.selling_price}
+                                    onChange={handleChange}
+                                    step="0.01"
+                                    min="0"
+                                />
+                                {errors.selling_price && <p className="ap-error">⚠ {errors.selling_price}</p>}
+                            </Col>
+
+                            <Col md={4}>
+                                <label className="ap-label">
+                                    Stock Quantity <span>*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    name="stock"
+                                    className={`ap-input ${errors.stock ? 'error' : ''}`}
+                                    placeholder="0"
+                                    value={formData.stock}
+                                    onChange={handleChange}
+                                    min="0"
+                                />
+                                {errors.stock && <p className="ap-error">⚠ {errors.stock}</p>}
+                            </Col>
+
+                            <Col md={12}>
+                                <label className="ap-label">Description (Optional)</label>
+                                <textarea
+                                    name="description"
+                                    className="ap-textarea"
+                                    placeholder="Describe your product..."
+                                    value={formData.description}
+                                    onChange={handleChange}
+                                    rows={2}
+                                />
+                            </Col>
+
+                            <Col md={12}>
+                                <label className="ap-label">
+                                    Product Image <span>*</span>
+                                </label>
+                                {previewUrl ? (
+                                    <div className="ap-preview-wrap">
+                                        <img src={previewUrl} alt="Preview" className="ap-preview" />
+                                        <button
+                                            type="button"
+                                            className="ap-preview-remove"
+                                            onClick={() => {
+                                                URL.revokeObjectURL(previewUrl)
+                                                setPreviewUrl(null)
+                                                setFormData((prev) => ({ ...prev, image: null }))
+                                            }}
+                                        >
+                                            <FaTimes size={10} /> Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="ap-upload-zone">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageChange}
+                                        />
+                                        <FaCamera size={22} style={{ color: '#9ca3af', marginBottom: 6 }} />
+                                        <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#374151' }}>
+                                            Click or drop image to upload
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>JPG, PNG up to 2MB</div>
+                                    </div>
+                                )}
+                                {errors.image && <p className="ap-error">⚠ {errors.image}</p>}
+                            </Col>
+                        </Row>
+
+                        <div className="ap-footer">
+                            <button
+                                type="button"
+                                className="ap-btn ap-btn-cancel"
+                                onClick={() => onClose(false)}
+                                disabled={actionLoading}
+                            >
+                                <FaTimes size={12} /> Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="ap-btn ap-btn-save"
+                                disabled={actionLoading}
+                            >
+                                {actionLoading ? (
+                                    <>
+                                        <span className="ap-spinner" />
+                                        Creating…
+                                    </>
+                                ) : (
+                                    <>
+                                        <FaSave size={13} />
+                                        Create Custom Product
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
         </>
     )
 }

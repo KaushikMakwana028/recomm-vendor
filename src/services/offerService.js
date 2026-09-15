@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost/kaushik/recomm/api/'
+const BASE_URL = 'https://admin.recomm.in/api/'
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token')

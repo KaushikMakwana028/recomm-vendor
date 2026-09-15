@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost/kaushik/recomm/api/'
+const BASE_URL = 'https://admin.recomm.in/api/'
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token')
@@ -55,13 +55,16 @@ const productService = {
   },
 
   /**
-   * GET /get_products?search=query
-   * Search existing products (for adding to vendor inventory)
+   * GET /get_products?search=query&category_id=1&brand=X&section=recent
+   * Search and filter master catalogue products
    */
-  searchProducts: async ({ search, category_id } = {}) => {
+  searchProducts: async ({ search, category_id, brand, section, limit } = {}) => {
     const params = new URLSearchParams()
     if (search) params.append('search', search)
     if (category_id) params.append('category_id', category_id)
+    if (brand) params.append('brand', brand)
+    if (section) params.append('section', section)
+    if (limit) params.append('limit', limit)
 
     const response = await fetch(`${BASE_URL}/get_products?${params}`, {
       method: 'GET',
@@ -84,12 +87,14 @@ const productService = {
 
   /**
    * POST /add_vendor_product
-   * Add new product (FormData with image)
+   * Add new product (FormData with image or variant selection)
    */
   addVendorProduct: async (productData) => {
     const formData = new FormData()
 
     const fields = {
+      variant_id: productData.variant_id,
+      product_id: productData.product_id,
       product_name: productData.product_name,
       brand: productData.brand,
       category_id: productData.category_id,
@@ -106,11 +111,6 @@ const productService = {
         formData.append(key, String(value))
       }
     })
-
-    // If linking to existing product
-    if (productData.product_id) {
-      formData.append('product_id', productData.product_id)
-    }
 
     // Append image file
     if (productData.image instanceof File) {

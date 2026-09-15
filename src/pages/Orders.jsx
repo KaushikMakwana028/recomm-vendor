@@ -29,16 +29,18 @@ import {
 } from "../utils/invoiceGenerator";
 
 const statusConfig = {
-  new: { color: "#00204E", bg: "#f0f9ff" },
-  accepted: { color: "#34A129", bg: "#dcfce7" },
-  packed: { color: "#189031", bg: "#bbf7d0" },
-  out_for_delivery: { color: "#00204E", bg: "#f0f9ff" },
-  delivered: { color: "#34A129", bg: "#dcfce7" },
-  cancelled: { color: "#ef4444", bg: "#fef2f2" },
+  pending: { color: "#00204E", bg: "#f0f9ff", label: "New" },
+  confirmed: { color: "#34A129", bg: "#dcfce7", label: "Accepted" },
+  packed: { color: "#189031", bg: "#bbf7d0", label: "Packed" },
+  out_for_delivery: { color: "#00204E", bg: "#f0f9ff", label: "Out for Delivery" },
+  delivered: { color: "#34A129", bg: "#dcfce7", label: "Delivered" },
+  cancelled: { color: "#ef4444", bg: "#fef2f2", label: "Cancelled" },
+  new: { color: "#00204E", bg: "#f0f9ff", label: "New" },
+  accepted: { color: "#34A129", bg: "#dcfce7", label: "Accepted" },
 };
 
 const Orders = () => {
-  const [activeTab, setActiveTab] = useState("new");
+  const [activeTab, setActiveTab] = useState("pending");
   const [showDetail, setShowDetail] = useState(false);
   const [selectedOrder, setSelected] = useState(null);
 
@@ -84,6 +86,10 @@ const Orders = () => {
 
       // Step-tailored alerts
       const stepMessages = {
+        confirmed: {
+          title: "Order Accepted! 🎉",
+          html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> has been accepted.</p><span style="display:inline-block; margin-top:8px; font-size:0.8rem; font-weight:600; color:#34A129; background:#dcfce7; padding:4px 12px; border-radius:12px;">Moved to Accepted section</span>`,
+        },
         accepted: {
           title: "Order Accepted! 🎉",
           html: `<p style="margin: 0; color: #4b5563;">Order <b>#${order.orderNumber}</b> has been accepted.</p><span style="display:inline-block; margin-top:8px; font-size:0.8rem; font-weight:600; color:#34A129; background:#dcfce7; padding:4px 12px; border-radius:12px;">Moved to Accepted section</span>`,
@@ -126,8 +132,8 @@ const Orders = () => {
   };
 
   const tabs = [
-    { key: "new", label: t("orders.newOrders") || "New" },
-    { key: "accepted", label: t("orders.accepted") || "Accepted" },
+    { key: "pending", label: t("orders.newOrders") || "New" },
+    { key: "confirmed", label: t("orders.accepted") || "Accepted" },
     { key: "packed", label: t("orders.packed") || "Packed" },
     {
       key: "out_for_delivery",
@@ -137,7 +143,11 @@ const Orders = () => {
     { key: "cancelled", label: t("orders.cancelled") || "Cancelled" },
   ];
 
-  const filtered = orders.filter((o) => o.status === activeTab);
+  const filtered = orders.filter((o) => {
+    if (activeTab === "pending") return o.status === "pending" || o.status === "new";
+    if (activeTab === "confirmed") return o.status === "confirmed" || o.status === "accepted";
+    return o.status === activeTab;
+  });
 
   return (
     <Layout>
@@ -366,7 +376,11 @@ const Orders = () => {
       <div className="ord__tabs-wrap">
         <div className="ord__tabs-scroll">
           {tabs.map((tab) => {
-            const count = orders.filter((o) => o.status === tab.key).length;
+            const count = orders.filter((o) => {
+              if (tab.key === "pending") return o.status === "pending" || o.status === "new";
+              if (tab.key === "confirmed") return o.status === "confirmed" || o.status === "accepted";
+              return o.status === tab.key;
+            }).length;
             return (
               <button
                 key={tab.key}
@@ -400,7 +414,7 @@ const Orders = () => {
             ))
           ) : filtered.length > 0 ? (
             filtered.map((order, idx) => {
-              const sc = statusConfig[order.status] || statusConfig.new;
+              const sc = statusConfig[order.status] || statusConfig.pending;
               return (
                 <motion.div
                   key={order.id}
@@ -429,7 +443,7 @@ const Orders = () => {
                                 className="ord__status-chip"
                                 style={{ background: sc.bg, color: sc.color }}
                               >
-                                {order.status.replace(/_/g, " ")}
+                                {sc.label || order.status.replace(/_/g, " ")}
                               </span>
                             </div>
                             <p className="ord__amount">₹{order.totalAmount}</p>
@@ -479,6 +493,30 @@ const Orders = () => {
                                 </span>
                               </p>
                             )}
+                            {/* Prominent Delivery Time Slot badge alongside delivery responsibility */}
+                            <p className="ord__info-item" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                              <strong>Time Slot:</strong>
+                              <span style={{
+                                background: order.chosenTimeOption === "immediately" ? "#fee2e2" : order.chosenTimeOption === "lunch" ? "#fef3c7" : order.chosenTimeOption === "dinner" ? "#ede9fe" : "#e0f2fe",
+                                color: order.chosenTimeOption === "immediately" ? "#991b1b" : order.chosenTimeOption === "lunch" ? "#92400e" : order.chosenTimeOption === "dinner" ? "#5b21b6" : "#075985",
+                                padding: "3px 10px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 800,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                ⏱️ {order.chosenTimeOption ? order.chosenTimeOption.toUpperCase() : "IMMEDIATELY"}
+                              </span>
+                              {order.estimatedWindowFormatted && (
+                                <span style={{ color: '#047857', fontWeight: 600, fontSize: '0.78rem' }}>
+                                  ({order.estimatedWindowFormatted})
+                                </span>
+                              )}
+                            </p>
                             <p className="ord__info-item">
                               <strong>Time:</strong>{" "}
                               {new Date(order.orderDate).toLocaleString(
@@ -526,11 +564,11 @@ const Orders = () => {
                               <FaEye size={14} /> View Details
                             </button>
 
-                            {order.status === "new" && (
+                            {(order.status === "pending" || order.status === "new") && (
                               <>
                                 <button
                                   className="ord__btn ord__btn-accept"
-                                  onClick={() => handleStatusUpdate(order, "accepted")}
+                                  onClick={() => handleStatusUpdate(order, "confirmed")}
                                 >
                                   <FaCheck size={13} /> Accept Order
                                 </button>
@@ -543,7 +581,7 @@ const Orders = () => {
                               </>
                             )}
 
-                            {order.status === "accepted" && (
+                            {(order.status === "confirmed" || order.status === "accepted") && (
                               <button
                                 className="ord__btn ord__btn-packed"
                                 onClick={() => handleStatusUpdate(order, "packed")}

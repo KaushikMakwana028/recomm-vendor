@@ -26,8 +26,8 @@ import {
 } from "../utils/invoiceGenerator";
 
 const statusConfig = {
-  new: { color: "#f59e0b", bg: "#fffbeb", label: "New", icon: FaShoppingBag },
-  accepted: {
+  pending: { color: "#f59e0b", bg: "#fffbeb", label: "New", icon: FaShoppingBag },
+  confirmed: {
     color: "#34A129",
     bg: "#dcfce7",
     label: "Accepted",
@@ -52,9 +52,16 @@ const statusConfig = {
     label: "Cancelled",
     icon: FaTimesCircle,
   },
+  new: { color: "#f59e0b", bg: "#fffbeb", label: "New", icon: FaShoppingBag },
+  accepted: {
+    color: "#34A129",
+    bg: "#dcfce7",
+    label: "Accepted",
+    icon: FaCheckCircle,
+  },
 };
 
-const steps = ["new", "accepted", "packed", "out_for_delivery", "delivered"];
+const steps = ["pending", "confirmed", "packed", "out_for_delivery", "delivered"];
 
 const OrderDetail = ({ order, onStatusUpdate, onClose, storeProfile }) => {
   const dispatch = useDispatch();
@@ -152,10 +159,11 @@ const OrderDetail = ({ order, onStatusUpdate, onClose, storeProfile }) => {
 
   if (!order) return null;
 
-  const sc = statusConfig[order.status] || statusConfig.new;
+  const normalizedStatus = order.status === "new" ? "pending" : (order.status === "accepted" ? "confirmed" : order.status);
+  const sc = statusConfig[normalizedStatus] || statusConfig.pending;
   const StatusIcon = sc.icon;
-  const stepIdx = steps.indexOf(order.status);
-  const isCancelled = order.status === "cancelled";
+  const stepIdx = steps.indexOf(normalizedStatus);
+  const isCancelled = normalizedStatus === "cancelled";
   const items = order.items || [];
 
   return (
@@ -496,6 +504,31 @@ const OrderDetail = ({ order, onStatusUpdate, onClose, storeProfile }) => {
                     </span>
                   )
                 },
+                {
+                  key: "Time Slot",
+                  val: (
+                    <span style={{
+                      background: order.chosenTimeOption === "immediately" ? "#fee2e2" : order.chosenTimeOption === "lunch" ? "#fef3c7" : order.chosenTimeOption === "dinner" ? "#ede9fe" : "#e0f2fe",
+                      color: order.chosenTimeOption === "immediately" ? "#991b1b" : order.chosenTimeOption === "lunch" ? "#92400e" : order.chosenTimeOption === "dinner" ? "#5b21b6" : "#075985",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      ⏱️ {order.chosenTimeOption ? order.chosenTimeOption.toUpperCase() : "IMMEDIATELY"}
+                    </span>
+                  )
+                },
+                ...(order.estimatedWindowFormatted ? [{
+                  key: "Delivery Window",
+                  val: (
+                    <span style={{ color: '#047857', fontWeight: 600, fontSize: '0.8rem' }}>
+                      {order.estimatedWindowFormatted}
+                    </span>
+                  )
+                }] : []),
               ].map(({ key, val }) => (
                 <div key={key} className="od-info-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="od-info-key">{key}</span>
@@ -719,17 +752,17 @@ const OrderDetail = ({ order, onStatusUpdate, onClose, storeProfile }) => {
 
             {/* ── Action controls ── */}
             <div className="od-actions" style={{ marginTop: '0.5rem' }}>
-              {order.status === "new" && (
+              {(order.status === "pending" || order.status === "new") && (
                 <Row className="g-2">
                   <Col xs={6}>
                     <button
                       className="od-action-btn od-btn-accept w-100"
                       onClick={() => {
                         if (onStatusUpdate) {
-                          onStatusUpdate(order, "accepted");
+                          onStatusUpdate(order, "confirmed");
                         } else {
                           dispatch(
-                            updateOrderStatus({ id: order.id, status: "accepted" }),
+                            updateOrderStatus({ id: order.id, status: "confirmed" }),
                           );
                         }
                       }}
@@ -757,7 +790,7 @@ const OrderDetail = ({ order, onStatusUpdate, onClose, storeProfile }) => {
                   </Col>
                 </Row>
               )}
-              {order.status === "accepted" && (
+              {(order.status === "confirmed" || order.status === "accepted") && (
                 <button
                   className="od-action-btn od-btn-packed w-100"
                   onClick={() => {

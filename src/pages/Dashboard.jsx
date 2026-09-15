@@ -31,8 +31,10 @@ const Dashboard = () => {
   const getStatusColor = (status) =>
     ({
       pending:  { color: '#d97706', bg: '#fef3c7' },
+      confirmed:{ color: '#34A129', bg: '#dcfce7' },
       accepted: { color: '#34A129', bg: '#dcfce7' },
       packed:   { color: '#189031', bg: '#bbf7d0' },
+      out_for_delivery: { color: '#00204E', bg: '#f0f9ff' },
       delivered:{ color: '#34A129', bg: '#dcfce7' },
       cancelled:{ color: '#dc2626', bg: '#fee2e2' },
     }[status] || { color: '#6b7280', bg: '#f3f4f6' })

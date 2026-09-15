@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 
-const BASE = 'http://localhost/kaushik/recomm/api/'
+const BASE = 'https://admin.recomm.in/api/'
 
 // ─────────────────────────────────────────────
 // Helpers

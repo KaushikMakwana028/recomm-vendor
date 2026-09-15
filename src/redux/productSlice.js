@@ -59,9 +59,9 @@ export const fetchVendorProducts = createAsyncThunk(
 
 export const searchProducts = createAsyncThunk(
   'product/searchProducts',
-  async ({ search, category_id } = {}, { rejectWithValue }) => {
+  async ({ search, category_id, brand, section, limit } = {}, { rejectWithValue }) => {
     try {
-      const data = await productService.searchProducts({ search, category_id })
+      const data = await productService.searchProducts({ search, category_id, brand, section, limit })
       return data.data
     } catch (error) {
       return rejectWithValue(error.message || 'Failed to search products')

@@ -20,6 +20,16 @@ const Settings = () => {
     is_holiday: 0,
     deliveryRadius: 5,
     deliveryAvailability: 'all_week',
+    prep_time_minutes: 30,
+    lunch_window_start: '12:00',
+    lunch_window_end: '14:00',
+    dinner_window_start: '19:00',
+    dinner_window_end: '21:00',
+    slot_immediately_enabled: 1,
+    slot_later_enabled: 1,
+    slot_lunch_enabled: 1,
+    slot_dinner_enabled: 1,
+    slot_custom_enabled: 1,
   })
 
   // Fetch profile on mount
@@ -36,6 +46,16 @@ const Settings = () => {
         is_holiday: profile.is_holiday || 0,
         deliveryRadius: 5, // Default value since not in API
         deliveryAvailability: 'all_week', // Default value
+        prep_time_minutes: profile.prep_time_minutes !== undefined ? profile.prep_time_minutes : 30,
+        lunch_window_start: profile.lunch_window_start ? profile.lunch_window_start.slice(0, 5) : '12:00',
+        lunch_window_end: profile.lunch_window_end ? profile.lunch_window_end.slice(0, 5) : '14:00',
+        dinner_window_start: profile.dinner_window_start ? profile.dinner_window_start.slice(0, 5) : '19:00',
+        dinner_window_end: profile.dinner_window_end ? profile.dinner_window_end.slice(0, 5) : '21:00',
+        slot_immediately_enabled: profile.slot_immediately_enabled !== undefined ? Number(profile.slot_immediately_enabled) : 1,
+        slot_later_enabled: profile.slot_later_enabled !== undefined ? Number(profile.slot_later_enabled) : 1,
+        slot_lunch_enabled: profile.slot_lunch_enabled !== undefined ? Number(profile.slot_lunch_enabled) : 1,
+        slot_dinner_enabled: profile.slot_dinner_enabled !== undefined ? Number(profile.slot_dinner_enabled) : 1,
+        slot_custom_enabled: profile.slot_custom_enabled !== undefined ? Number(profile.slot_custom_enabled) : 1,
       })
     }
   }, [profile])
@@ -86,11 +106,21 @@ const Settings = () => {
   const handleSubmit = (e) => {
     e.preventDefault()
 
-    // Create FormData with only the fields that should be updated
+    // Create FormData with fields that should be updated
     const submitData = new FormData()
     submitData.append('opening_time', formData.opening_time)
     submitData.append('closing_time', formData.closing_time)
     submitData.append('is_holiday', formData.is_holiday)
+    submitData.append('prep_time_minutes', formData.prep_time_minutes)
+    submitData.append('lunch_window_start', formData.lunch_window_start)
+    submitData.append('lunch_window_end', formData.lunch_window_end)
+    submitData.append('dinner_window_start', formData.dinner_window_start)
+    submitData.append('dinner_window_end', formData.dinner_window_end)
+    submitData.append('slot_immediately_enabled', formData.slot_immediately_enabled)
+    submitData.append('slot_later_enabled', formData.slot_later_enabled)
+    submitData.append('slot_lunch_enabled', formData.slot_lunch_enabled)
+    submitData.append('slot_dinner_enabled', formData.slot_dinner_enabled)
+    submitData.append('slot_custom_enabled', formData.slot_custom_enabled)
 
     // Dispatch update action
     dispatch(updateProfile(submitData))
@@ -104,6 +134,16 @@ const Settings = () => {
         is_holiday: profile.is_holiday || 0,
         deliveryRadius: 5,
         deliveryAvailability: 'all_week',
+        prep_time_minutes: profile.prep_time_minutes !== undefined ? profile.prep_time_minutes : 30,
+        lunch_window_start: profile.lunch_window_start ? profile.lunch_window_start.slice(0, 5) : '12:00',
+        lunch_window_end: profile.lunch_window_end ? profile.lunch_window_end.slice(0, 5) : '14:00',
+        dinner_window_start: profile.dinner_window_start ? profile.dinner_window_start.slice(0, 5) : '19:00',
+        dinner_window_end: profile.dinner_window_end ? profile.dinner_window_end.slice(0, 5) : '21:00',
+        slot_immediately_enabled: profile.slot_immediately_enabled !== undefined ? Number(profile.slot_immediately_enabled) : 1,
+        slot_later_enabled: profile.slot_later_enabled !== undefined ? Number(profile.slot_later_enabled) : 1,
+        slot_lunch_enabled: profile.slot_lunch_enabled !== undefined ? Number(profile.slot_lunch_enabled) : 1,
+        slot_dinner_enabled: profile.slot_dinner_enabled !== undefined ? Number(profile.slot_dinner_enabled) : 1,
+        slot_custom_enabled: profile.slot_custom_enabled !== undefined ? Number(profile.slot_custom_enabled) : 1,
       })
     }
     dispatch(clearStoreError())
@@ -548,6 +588,146 @@ const Settings = () => {
               </Row>
             </Section>
 
+            {/* Delivery Time Slots & Prep Settings */}
+            <Section icon={FaClock} title="Delivery Time Slots & Preparation" delay={0.23}>
+              <Row className="g-3">
+                <Col md={12}>
+                  <label className="set-label">Preparation Time (minutes)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="180"
+                    step="5"
+                    className="set-input"
+                    name="prep_time_minutes"
+                    value={formData.prep_time_minutes}
+                    onChange={handleChange}
+                    placeholder="e.g. 30"
+                  />
+                  <small className="text-muted d-block mt-1" style={{ fontSize: '0.75rem' }}>
+                    Average minutes required to prepare and pack an order before delivery.
+                  </small>
+                </Col>
+
+                <Col md={6}>
+                  <label className="set-label">Lunch Window Start</label>
+                  <input
+                    type="time"
+                    className="set-input"
+                    name="lunch_window_start"
+                    value={formData.lunch_window_start}
+                    onChange={handleChange}
+                  />
+                </Col>
+                <Col md={6}>
+                  <label className="set-label">Lunch Window End</label>
+                  <input
+                    type="time"
+                    className="set-input"
+                    name="lunch_window_end"
+                    value={formData.lunch_window_end}
+                    onChange={handleChange}
+                  />
+                </Col>
+
+                <Col md={6}>
+                  <label className="set-label">Dinner Window Start</label>
+                  <input
+                    type="time"
+                    className="set-input"
+                    name="dinner_window_start"
+                    value={formData.dinner_window_start}
+                    onChange={handleChange}
+                  />
+                </Col>
+                <Col md={6}>
+                  <label className="set-label">Dinner Window End</label>
+                  <input
+                    type="time"
+                    className="set-input"
+                    name="dinner_window_end"
+                    value={formData.dinner_window_end}
+                    onChange={handleChange}
+                  />
+                </Col>
+
+                <Col md={12} className="mt-4">
+                  <label className="set-label mb-2">Enabled Delivery Time Options for Customers</label>
+                  <div className="d-flex flex-column gap-2 p-3 bg-light rounded-3 border">
+                    <Form.Check
+                      type="switch"
+                      id="slot-immediately-switch"
+                      name="slot_immediately_enabled"
+                      label={
+                        <div>
+                          <span className="fw-semibold text-dark">Immediately</span>
+                          <span className="text-muted small d-block">Deliver as soon as prepared + travel time</span>
+                        </div>
+                      }
+                      checked={Number(formData.slot_immediately_enabled) === 1}
+                      onChange={handleChange}
+                    />
+                    <hr className="my-1 text-muted" />
+                    <Form.Check
+                      type="switch"
+                      id="slot-later-switch"
+                      name="slot_later_enabled"
+                      label={
+                        <div>
+                          <span className="fw-semibold text-dark">Later (After 3–4 Hours)</span>
+                          <span className="text-muted small d-block">Scheduled dispatch after 3 to 4 hours</span>
+                        </div>
+                      }
+                      checked={Number(formData.slot_later_enabled) === 1}
+                      onChange={handleChange}
+                    />
+                    <hr className="my-1 text-muted" />
+                    <Form.Check
+                      type="switch"
+                      id="slot-lunch-switch"
+                      name="slot_lunch_enabled"
+                      label={
+                        <div>
+                          <span className="fw-semibold text-dark">Lunch Delivery</span>
+                          <span className="text-muted small d-block">Between {formData.lunch_window_start || '12:00'} and {formData.lunch_window_end || '14:00'}</span>
+                        </div>
+                      }
+                      checked={Number(formData.slot_lunch_enabled) === 1}
+                      onChange={handleChange}
+                    />
+                    <hr className="my-1 text-muted" />
+                    <Form.Check
+                      type="switch"
+                      id="slot-dinner-switch"
+                      name="slot_dinner_enabled"
+                      label={
+                        <div>
+                          <span className="fw-semibold text-dark">Dinner Delivery</span>
+                          <span className="text-muted small d-block">Between {formData.dinner_window_start || '19:00'} and {formData.dinner_window_end || '21:00'}</span>
+                        </div>
+                      }
+                      checked={Number(formData.slot_dinner_enabled) === 1}
+                      onChange={handleChange}
+                    />
+                    <hr className="my-1 text-muted" />
+                    <Form.Check
+                      type="switch"
+                      id="slot-custom-switch"
+                      name="slot_custom_enabled"
+                      label={
+                        <div>
+                          <span className="fw-semibold text-dark">Custom Date & Time</span>
+                          <span className="text-muted small d-block">Customer selects a specific date & time</span>
+                        </div>
+                      }
+                      checked={Number(formData.slot_custom_enabled) === 1}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </Col>
+              </Row>
+            </Section>
+
             {/* Language Settings - Interactive */}
             <Section icon={FaGlobe} title={t('settings.language') || 'Language'} delay={0.26}>
               <Row className="g-3">
@@ -648,6 +828,18 @@ const Settings = () => {
                       val: formData.opening_time && formData.closing_time
                         ? `${formData.opening_time} - ${formData.closing_time}`
                         : '—'
+                    },
+                    {
+                      key: 'Prep Time',
+                      val: `${formData.prep_time_minutes || 0} mins`
+                    },
+                    {
+                      key: 'Lunch Window',
+                      val: `${formData.lunch_window_start} - ${formData.lunch_window_end}`
+                    },
+                    {
+                      key: 'Dinner Window',
+                      val: `${formData.dinner_window_start} - ${formData.dinner_window_end}`
                     },
                     {
                       key: 'Delivery Radius',
